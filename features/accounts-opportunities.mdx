@@ -1,0 +1,270 @@
+---
+title: Accounts & Opportunities
+description: Track customer accounts, link sales opportunities, and calculate ARR impact
+icon: building
+---
+
+GTM Feedback integrates with your CRM to track customer accounts and sales opportunities, providing crucial business context for every piece of feedback.
+
+## Account Tracking
+
+Accounts represent your customers and prospects in the system.
+
+### Account Data
+
+Account information is synced from Salesforce and includes:
+
+<CardGroup cols={2}>
+  <Card title="Basic Information" icon="info-circle">
+    - Account name
+    - Account type
+    - Region
+    - Website
+    - Company logo
+  </Card>
+  <Card title="Business Metrics" icon="chart-line">
+    - Annual Recurring Revenue (ARR)
+    - Enterprise status flag
+    - Account creation date
+    - Last updated timestamp
+  </Card>
+</CardGroup>
+
+### Account Pages
+
+Each account has a dedicated page at `/accounts/[accountId]` showing:
+
+<Steps>
+  <Step title="Account header">
+    - Company logo (if available)
+    - Account name
+    - Total feedback count
+    - Total ARR from account and opportunities
+    - Website link
+  </Step>
+  <Step title="Feedback by severity">
+    All feedback from this account, organized into expandable sections:
+    - **High Severity** - Critical customer needs
+    - **Medium Severity** - Important requests  
+    - **Low Severity** - Nice-to-have items
+  </Step>
+  <Step title="Feedback details">
+    Each feedback item shows:
+    - Feature request title and link
+    - Request status badge (Open, Shipped, Deprioritized)
+    - Customer pain description
+    - Creator and creation date
+  </Step>
+</Steps>
+
+### Account Search
+
+When adding feedback, the account search provides:
+
+- **Real-time search** - Type to filter accounts by name
+- **Logo display** - Visual account identification
+- **ARR context** - See account value while selecting
+- **Recent accounts** - Quick access to frequently used accounts
+
+<Tip>
+Account data is automatically synced from Salesforce, so you don't need to manually manage accounts in GTM Feedback.
+</Tip>
+
+## Opportunity Linking
+
+Link feedback to specific sales opportunities for deal-level tracking.
+
+### Opportunity Data
+
+Opportunity information synced from Salesforce includes:
+
+```typescript
+{
+  id: string           // Salesforce opportunity ID
+  accountId: string    // Parent account ID
+  name: string         // Opportunity name
+  arr: number         // Annual recurring revenue
+  stage: string       // Sales stage
+  closeDate: Date     // Expected close date
+}
+```
+
+### Linking Opportunities
+
+When creating or editing feedback:
+
+1. **Select the account first** - Opportunities are filtered by account
+2. **Choose opportunity** - Dropdown shows all opportunities for that account
+3. **Optional field** - You can skip opportunity selection if not applicable
+
+<AccordionGroup>
+  <Accordion title="When to link opportunities">
+    Link opportunities when:
+    - Feedback is tied to a specific deal
+    - Feature is a requirement for deal closure
+    - You need deal-level ARR tracking
+    - Sales team requested the feature for this deal
+  </Accordion>
+  
+  <Accordion title="When to skip opportunities">
+    Skip opportunity linking when:
+    - Feedback is general product improvement
+    - Not tied to any specific deal
+    - Account-level tracking is sufficient
+    - Multiple opportunities might benefit
+  </Accordion>
+</AccordionGroup>
+
+## ARR Calculations
+
+GTM Feedback automatically calculates ARR (Annual Recurring Revenue) to help prioritize features.
+
+### Account-Level ARR
+
+The ARR associated with an account includes:
+
+- **Base ARR** - Current account ARR from Salesforce
+- **Opportunity ARR** - Sum of ARR from open opportunities
+
+### Request-Level ARR
+
+For each feature request, see:
+
+<Tabs>
+  <Tab title="Open Opportunity ARR">
+    Total ARR from all **open** sales opportunities linked to feedback for this request.
+    
+    This represents revenue at risk if the feature isn't delivered.
+  </Tab>
+  <Tab title="Total Customer ARR">
+    Combined ARR from all accounts that have provided feedback on this request.
+    
+    This represents the revenue base interested in this feature.
+  </Tab>
+</Tabs>
+
+### Area-Level ARR
+
+Product area analytics show:
+
+- Total ARR across all requests in the area
+- ARR by request priority
+- ARR trends over time
+
+<Info>
+ARR is displayed in USD format with appropriate scaling (e.g., $1.2M for $1,200,000).
+</Info>
+
+## CRM Data Schema
+
+Data synced from Salesforce follows this structure:
+
+### Accounts Table
+
+```sql
+sfdc_accounts {
+  id: text              // Primary key from Salesforce
+  name: text            // Company name
+  type: text            // Account type
+  region_name: text     // Geographic region
+  arr: numeric(14,2)    // Annual recurring revenue
+  is_enterprise: bool   // Enterprise customer flag
+  website: text         // Company website
+  logo: text           // Logo URL
+  link: text           // Salesforce URL
+  created_at: timestamp
+  updated_at: timestamp
+}
+```
+
+### Opportunities Table
+
+```sql
+sfdc_opportunities {
+  id: text              // Primary key from Salesforce
+  account_id: text      // Foreign key to accounts
+  name: text            // Opportunity name
+  arr: numeric(14,2)    // Deal ARR value
+  stage: text          // Current sales stage
+  close_date: date     // Expected close date
+  created_at: timestamp
+  updated_at: timestamp
+}
+```
+
+## Feedback-Account Relationship
+
+Each feedback entry must be linked to exactly one account:
+
+```typescript
+feedback {
+  id: uuid
+  requestId: uuid           // Feature request
+  accountId: text           // Required - Salesforce account ID
+  opportunityId: text       // Optional - Salesforce opportunity ID
+  severity: enum            // low | medium | high
+  description: text         // Customer pain
+  creator: uuid             // User who created
+  externalLinks: text[]     // Supporting links
+  createdAt: timestamp
+}
+```
+
+<Warning>
+You cannot create feedback without selecting an account. This ensures all feedback has proper business context.
+</Warning>
+
+## Account Insights
+
+### Per Account
+
+On account pages, see:
+
+- **Feedback distribution** - Count by severity level
+- **Feature interests** - Which features this customer cares about
+- **Request status** - How many requests are open vs. shipped
+- **Engagement timeline** - When feedback was provided
+
+### Across Accounts
+
+In aggregate views, understand:
+
+- **Top accounts by feedback** - Most engaged customers
+- **Enterprise focus** - Feedback from enterprise accounts
+- **Regional patterns** - Feedback by geographic region
+- **ARR influence** - Which accounts drive feature priority
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Link the right account">
+    Always link to the actual customer providing feedback:
+    - Use the account from the sales opportunity
+    - Match the account from support tickets
+    - Verify spelling matches Salesforce exactly
+  </Accordion>
+  
+  <Accordion title="Use opportunities strategically">
+    Link opportunities when:
+    - Feature is blocking a deal
+    - Sales team needs to track deal-specific features
+    - Close date creates urgency
+    - Deal ARR is significant
+  </Accordion>
+  
+  <Accordion title="Keep CRM data fresh">
+    Ensure your Salesforce data is current:
+    - Update ARR regularly
+    - Keep opportunity stages current
+    - Archive closed-lost opportunities
+    - Maintain accurate close dates
+  </Accordion>
+  
+  <Accordion title="Review account pages regularly">
+    Use account pages to:
+    - Prepare for customer calls
+    - Review feedback before renewals
+    - Understand customer priorities
+    - Track feature delivery for specific accounts
+  </Accordion>
+</AccordionGroup>

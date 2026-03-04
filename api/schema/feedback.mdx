@@ -1,0 +1,198 @@
+---
+title: 'Feedback table'
+description: 'Database schema reference for the feedback table'
+keywords: ['feedback', 'schema', 'database', 'table', 'drizzle']
+---
+
+## Overview
+
+The `feedback` table stores individual feedback items submitted for feature requests. Each feedback entry is associated with a request, an account, and optionally an opportunity.
+
+## Fields
+
+<ResponseField name="id" type="uuid" required>
+  Primary key. Auto-generated UUID for the feedback entry.
+</ResponseField>
+
+<ResponseField name="requestId" type="uuid" required>
+  Foreign key reference to `requests.id`. The request this feedback belongs to.
+</ResponseField>
+
+<ResponseField name="accountId" type="text" required>
+  Foreign key reference to `sfdc_accounts.id`. The Salesforce account associated with this feedback.
+</ResponseField>
+
+<ResponseField name="opportunityId" type="text">
+  Foreign key reference to `sfdc_opportunities.id`. The Salesforce opportunity associated with this feedback, if any.
+</ResponseField>
+
+<ResponseField name="severity" type="severity" required>
+  Impact level of this feedback. See [Enums](#enums) for possible values.
+</ResponseField>
+
+<ResponseField name="description" type="text" required>
+  Detailed description of the feedback.
+</ResponseField>
+
+<ResponseField name="creator" type="uuid" required>
+  Foreign key reference to `users.id`. The user who created this feedback entry.
+</ResponseField>
+
+<ResponseField name="createdAt" type="timestamp" required>
+  Timestamp with timezone when the feedback was created. Default: `now()`.
+</ResponseField>
+
+<ResponseField name="externalLinks" type="text[]" required>
+  Array of external URLs related to this feedback (e.g., support tickets, Slack threads). Default: `[]`.
+</ResponseField>
+
+<ResponseField name="slug" type="text">
+  Optional URL-friendly identifier for the feedback within the request. Combined with `requestId` for uniqueness.
+</ResponseField>
+
+<ResponseField name="creationSource" type="feedback_creation_source" required>
+  How this feedback was created. See [Enums](#enums) for possible values. Default: `manual`.
+</ResponseField>
+
+<ResponseField name="metadata" type="jsonb">
+  Additional metadata stored as JSON.
+</ResponseField>
+
+## Enums
+
+### severity
+
+The `severity` field uses the `severity` enum with the following values:
+
+- `low` - Minor inconvenience or nice-to-have feature
+- `medium` - Moderate impact on user experience or workflow
+- `high` - Critical issue blocking important workflows or affecting revenue
+
+### feedback_creation_source
+
+The `creationSource` field uses the `feedback_creation_source` enum with the following values:
+
+- `manual` - Feedback was manually entered by a user
+- `agent` - Feedback was automatically created by an AI agent or automation
+
+## Relationships
+
+### Belongs to
+
+- **Request**: `feedback.requestId` → `requests.id` (cascade on delete)
+- **User** (creator): `feedback.creator` → `users.id`
+- **SFDC Account**: `feedback.accountId` → `sfdc_accounts.id`
+- **SFDC Opportunity**: `feedback.opportunityId` → `sfdc_opportunities.id` (optional)
+
+## Indexes
+
+<ResponseField name="feedback_request_slug_key" type="unique">
+  Unique constraint on the combination of `requestId` and `slug`.
+</ResponseField>
+
+<ResponseField name="feedback_request_created_idx" type="index">
+  Composite index on `requestId` and `createdAt` for efficient sorting of feedback within a request.
+</ResponseField>
+
+<ResponseField name="feedback_account_idx" type="index">
+  B-tree index on `accountId` for querying feedback by account.
+</ResponseField>
+
+<ResponseField name="feedback_creator_idx" type="index">
+  B-tree index on `creator` for querying feedback by creator.
+</ResponseField>
+
+## Example queries
+
+### Query all feedback for a request
+
+```typescript
+import { db } from './db';
+import { feedback } from './schema';
+import { eq } from 'drizzle-orm';
+
+const requestFeedback = await db.query.feedback.findMany({
+  where: eq(feedback.requestId, 'request-uuid-here'),
+  orderBy: (feedback, { desc }) => [desc(feedback.createdAt)],
+  with: {
+    user: true,
+    account: true,
+    opportunity: true,
+  },
+});
+```
+
+### Get high-severity feedback
+
+```typescript
+import { db } from './db';
+import { feedback } from './schema';
+import { eq } from 'drizzle-orm';
+
+const criticalFeedback = await db.query.feedback.findMany({
+  where: eq(feedback.severity, 'high'),
+  with: {
+    request: true,
+    account: true,
+  },
+});
+```
+
+### Find feedback by account
+
+```typescript
+import { db } from './db';
+import { feedback } from './schema';
+import { eq } from 'drizzle-orm';
+
+const accountFeedback = await db.query.feedback.findMany({
+  where: eq(feedback.accountId, 'sfdc-account-id'),
+  with: {
+    request: true,
+    opportunity: true,
+  },
+});
+```
+
+### Get feedback created by agent
+
+```typescript
+import { db } from './db';
+import { feedback } from './schema';
+import { eq } from 'drizzle-orm';
+
+const agentFeedback = await db.query.feedback.findMany({
+  where: eq(feedback.creationSource, 'agent'),
+  orderBy: (feedback, { desc }) => [desc(feedback.createdAt)],
+});
+```
+
+### Create new feedback
+
+```typescript
+import { db } from './db';
+import { feedback } from './schema';
+
+const newFeedback = await db.insert(feedback).values({
+  requestId: 'request-uuid-here',
+  accountId: 'sfdc-account-id',
+  opportunityId: 'sfdc-opportunity-id',
+  severity: 'high',
+  description: 'Customer is blocked by missing API authentication',
+  creator: 'user-uuid-here',
+  externalLinks: ['https://slack.com/archives/...'],
+  creationSource: 'manual',
+}).returning();
+```
+
+### Delete feedback (cascades from request)
+
+```typescript
+import { db } from './db';
+import { requests } from './schema';
+import { eq } from 'drizzle-orm';
+
+// Deleting a request will automatically delete all associated feedback
+// due to the cascade delete constraint
+await db.delete(requests).where(eq(requests.id, 'request-uuid-here'));
+```

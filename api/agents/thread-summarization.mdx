@@ -1,0 +1,365 @@
+---
+title: 'Thread Summarization Agent'
+description: 'AI agent for extracting feedback from Slack conversations and composing messages'
+---
+
+## Overview
+
+The Thread Summarization Agent (Slack Agent) extracts customer feedback signals from Slack conversations, composes natural Slack messages, and powers interactive chat experiences within Slack.
+
+**Location**: `packages/ai/src/agents/slack/index.ts`
+
+## Purpose
+
+Handles Slack-based interactions by:
+- Extracting pain points from Slack threads and messages
+- Summarizing multi-message conversations
+- Composing natural, friendly Slack notifications
+- Powering interactive chat with context awareness
+
+## Agent Configuration
+
+**Model**: GPT-4o Mini (via `gpt4oMini`)
+
+**Tools**: Conditional based on mode
+
+**Output**: Mode-dependent (extraction, compose, or streaming chat)
+
+## Modes of Operation
+
+### 1. Extract Mode
+
+Extracts feedback signals from Slack conversations.
+
+**System Prompt**:
+```
+You an AI agent that extracts feedback signals from Slack conversations.
+
+Your job is to:
+1. If given a thread/message reference, use tools to fetch the messages
+2. Analyze the conversation to identify customer pain points or feature requests
+3. Return a structured extraction with:
+   - summary: A brief summary of the conversation (for threads with multiple messages)
+   - painDescription: A clear, concise description of the pain point or feature request
+   - isCustomerSpecific: Whether this is tied to a specific customer or is general feedback
+
+Guidelines:
+- Focus on the core problem or desired capability
+- Be specific enough to distinguish from similar but different issues
+- Avoid vague language - be concrete about what's needed
+- Remove customer-specific context unless essential to understanding the pain
+- Always update your status before fetching messages so users know what you're doing
+```
+
+### 2. Compose Mode
+
+Composes natural, friendly Slack messages for various scenarios.
+
+**System Prompt**:
+```
+You an AI agent that composes natural, friendly Slack messages.
+
+Generate messages that:
+- Sound like a real person talking, not a template
+- Are conversational and friendly (not robotic)
+- Vary your wording naturally - don't use the same phrases repeatedly
+- Keep it concise (1-2 sentences for most messages)
+- Use Slack markdown format (bold with *text*, links with <url|text>)
+
+Never mention technical details like IDs or API parameters.
+```
+
+**Supported Compose Types**:
+- `match_notification` - Notify about matching feature request
+- `proposal` - Propose creating new feature request
+- `created_confirmation` - Confirm feature request creation
+- `dm_notification` - DM about feedback processing
+- `shipped_notification` - Celebrate shipped feature
+- `shipped_ephemeral` - Confirm marking as shipped
+- `approval_request` - Request approval to add feedback
+- `high_confidence_match` - Celebrate automatic match
+
+### 3. Chat Mode
+
+Powers interactive conversations with context awareness.
+
+**System Prompt** (abbreviated):
+```
+You an AI assistant for GTM Feedback - a platform that helps GTM teams collect, organize, and prioritize customer feedback.
+
+How Users Can Use GTM Feedback in Slack:
+
+1. Chat with me (you're doing it now!)
+2. Add Feedback via Shortcut
+3. React with :gtm-feedback: emoji
+4. Mark Features as Shipped
+5. Link Previews
+
+Conversation Flow:
+1. Check if you need context from the thread or channel
+2. When fetching context, update status first
+3. Keep users informed
+4. In DMs, update the chat title
+5. When performing actions, always confirm first
+```
+
+## Available Tools
+
+### getThreadMessages
+
+Fetch all messages from a Slack thread.
+
+<ParamField path="channel" type="string" required>
+  The Slack channel ID
+</ParamField>
+
+<ParamField path="threadTs" type="string" required>
+  The thread timestamp
+</ParamField>
+
+### getChannelMessages
+
+Fetch recent messages from a Slack channel.
+
+<ParamField path="channel" type="string" required>
+  The Slack channel ID
+</ParamField>
+
+<ParamField path="limit" type="number" default={20}>
+  Number of messages to fetch
+</ParamField>
+
+### updateAgentStatus
+
+Update the agent status message shown to users.
+
+<ParamField path="status" type="string" required>
+  The status message to display (format: "is doing thing...")
+</ParamField>
+
+## Input
+
+### Extract Mode Input
+
+<ParamField path="mode" type="string" value="extract" />
+
+<ParamField path="ref" type="object">
+  Slack reference to fetch and analyze
+  <ParamField path="channel" type="string" required />
+  <ParamField path="threadTs" type="string">
+    Thread timestamp (for threads)
+  </ParamField>
+  <ParamField path="ts" type="string">
+    Message timestamp (for single messages)
+  </ParamField>
+</ParamField>
+
+<ParamField path="messages" type="object[]">
+  Or provide messages directly to skip fetching
+  <ParamField path="text" type="string" />
+  <ParamField path="user" type="string" />
+</ParamField>
+
+### Compose Mode Input
+
+<ParamField path="mode" type="string" value="compose" />
+
+<ParamField path="composeType" type="enum" required>
+  Type of message to compose: `match_notification`, `proposal`, `created_confirmation`, `dm_notification`, `shipped_notification`, `shipped_ephemeral`, `approval_request`, `high_confidence_match`
+</ParamField>
+
+<ParamField path="composeContext" type="object">
+  Context data for message composition
+  <ParamField path="requestUrl" type="string" />
+  <ParamField path="requestTitle" type="string" />
+  <ParamField path="summary" type="string" />
+  <ParamField path="matched" type="boolean" />
+  <ParamField path="customerPain" type="string" />
+</ParamField>
+
+### Chat Mode Input
+
+<ParamField path="messages" type="ModelMessage[]" required>
+  Conversation history
+</ParamField>
+
+<ParamField path="isDirectMessage" type="boolean">
+  Whether this is a DM conversation
+</ParamField>
+
+<ParamField path="tools" type="Record<string, any>">
+  Additional tools to provide to the chat agent
+</ParamField>
+
+<ParamField path="getActiveTools" type="function">
+  Function returning list of active tool names
+</ParamField>
+
+<ParamField path="context" type="Record<string, any>">
+  Context passed to tools via experimental_context
+</ParamField>
+
+## Output
+
+### Extract Mode Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="type" type="string" value="extraction" />
+  <ResponseField name="summary" type="string">
+    Brief summary of the conversation (for multi-message threads)
+  </ResponseField>
+  <ResponseField name="painDescription" type="string">
+    Clear description of the pain point or feature request
+  </ResponseField>
+  <ResponseField name="isCustomerSpecific" type="boolean">
+    Whether this is tied to a specific customer
+  </ResponseField>
+  <ResponseField name="source" type="enum">
+    `message`, `thread`, or `messages`
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  <ResponseField name="inputTokens" type="number" />
+  <ResponseField name="outputTokens" type="number" />
+</ResponseField>
+
+<ResponseField name="steps" type="number">
+  Number of tool loop iterations
+</ResponseField>
+
+### Compose Mode Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="type" type="string" value="compose" />
+  <ResponseField name="message" type="string">
+    The generated Slack message (with Slack markdown)
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  <ResponseField name="inputTokens" type="number" />
+  <ResponseField name="outputTokens" type="number" />
+</ResponseField>
+
+### Chat Mode Output
+
+<ResponseField name="stream" type="StreamTextResult">
+  Streaming response for real-time chat interaction
+</ResponseField>
+
+## Usage Examples
+
+### Extract Feedback from Thread
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.slack.generate({
+  mode: "extract",
+  ref: {
+    channel: "C1234567890",
+    threadTs: "1234567890.123456"
+  }
+});
+
+if (result.output.type === "extraction") {
+  console.log(`Pain: ${result.output.painDescription}`);
+  console.log(`Summary: ${result.output.summary}`);
+  console.log(`Customer-specific: ${result.output.isCustomerSpecific}`);
+}
+```
+
+### Extract from Pre-Fetched Messages
+
+```typescript
+const result = await agent.slack.generate({
+  mode: "extract",
+  messages: [
+    { user: "U123", text: "We really need CSV export" },
+    { user: "U456", text: "Yes, this is blocking our workflow" }
+  ]
+});
+```
+
+### Compose Match Notification
+
+```typescript
+const result = await agent.slack.generate({
+  mode: "compose",
+  composeType: "match_notification",
+  composeContext: {
+    requestTitle: "CSV Export for Analytics",
+    requestUrl: "https://feedback.example.com/requests/csv-export",
+    summary: "Users requesting CSV export functionality"
+  }
+});
+
+console.log(result.output.message);
+// "Hey! This matches our existing feature request: <url|CSV Export for Analytics>. Feel free to add your feedback there!"
+```
+
+### Compose Shipped Notification
+
+```typescript
+const result = await agent.slack.generate({
+  mode: "compose",
+  composeType: "shipped_notification",
+  composeContext: {
+    requestTitle: "Dark Mode Support",
+    requestUrl: "https://feedback.example.com/requests/dark-mode"
+  }
+});
+```
+
+### Interactive Chat
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const stream = await agent.slack.chat({
+  messages: [
+    { role: "user", content: "What feedback do we have about exports?" }
+  ],
+  isDirectMessage: true,
+  tools: customTools,
+  context: { userId: "U123" }
+});
+
+// Stream the response
+for await (const chunk of stream.textStream) {
+  process.stdout.write(chunk);
+}
+```
+
+## Context Configuration
+
+Customize Slack integration by providing a `SlackToolContext`:
+
+```typescript
+import { createSlackAgent } from "@feedback/ai/agents";
+
+const slackAgent = createSlackAgent({
+  fetchThreadMessages: async (channel, threadTs) => {
+    const response = await slackClient.conversations.replies({
+      channel,
+      ts: threadTs
+    });
+    return response.messages;
+  },
+  fetchChannelMessages: async (channel, limit) => {
+    const response = await slackClient.conversations.history({
+      channel,
+      limit
+    });
+    return response.messages;
+  },
+  updateStatus: async (status) => {
+    await slackClient.chat.update({
+      channel: statusChannel,
+      ts: statusTs,
+      text: status
+    });
+  }
+});
+```

@@ -1,0 +1,351 @@
+---
+title: AI Models
+description: Integrate AI capabilities using Vercel AI SDK with OpenAI and Claude models
+icon: brain
+---
+
+## Overview
+
+GTM Feedback uses the Vercel AI SDK to power intelligent features like feedback analysis, semantic search, and automated workflows. The system supports multiple AI providers through AI Gateway with built-in development tools.
+
+## AI SDK Integration
+
+The AI package is located in `packages/ai/` and provides:
+
+- **Language Models** - Pre-configured Claude and GPT models
+- **Embeddings** - OpenAI text embeddings for semantic search
+- **Agents** - Specialized AI agents for different tasks
+- **Tools** - Structured tool calling for AI actions
+
+### Package Structure
+
+```
+packages/ai/
+├── src/
+│   ├── models.ts         # Model configurations
+│   ├── embeddings/       # Embedding generation
+│   ├── agents/           # Specialized AI agents
+│   └── tools/            # AI tool definitions
+└── package.json
+```
+
+## Model Configuration
+
+Models are configured in `packages/ai/src/models.ts` with AI Gateway support:
+
+```typescript packages/ai/src/models.ts
+import { gateway, wrapLanguageModel } from "ai";
+import { devToolsMiddleware } from "@ai-sdk/devtools";
+
+const isDev = process.env.NODE_ENV === "development";
+
+/**
+ * Claude Sonnet - Best for complex reasoning and analysis
+ */
+export const claudeSonnet = wrapLanguageModel({
+  model: gateway("anthropic/claude-sonnet-4-20250514"),
+  middleware: isDev ? [devToolsMiddleware()] : [],
+});
+
+/**
+ * Claude Haiku - Fast, efficient for simple tasks
+ */
+export const claudeHaiku = wrapLanguageModel({
+  model: gateway("anthropic/claude-haiku-4.5"),
+  middleware: isDev ? [devToolsMiddleware()] : [],
+});
+
+/**
+ * GPT-4o Mini - Cost-effective OpenAI model
+ */
+export const gpt4oMini = wrapLanguageModel({
+  model: gateway("openai/gpt-4o-mini"),
+  middleware: isDev ? [devToolsMiddleware()] : [],
+});
+```
+
+<Note>
+  Models are wrapped with `wrapLanguageModel` to enable middleware like DevTools in development.
+</Note>
+
+## AI Gateway Setup
+
+AI Gateway provides unified access to multiple AI providers with built-in caching, rate limiting, and observability.
+
+### Environment Variables
+
+Configure AI Gateway in your `.env` file:
+
+```bash
+# Option 1: AI Gateway API Key
+AI_GATEWAY_API_KEY=your_gateway_api_key
+
+# Option 2: Vercel OIDC Token
+VERCEL_OIDC_TOKEN=your_oidc_token
+
+# OpenAI API Key (for embeddings)
+OPENAI_API_KEY=your_openai_api_key
+```
+
+<Tip>
+  Use Vercel OIDC tokens in production for automatic credential management.
+</Tip>
+
+### Gateway Benefits
+
+<CardGroup cols={2}>
+  <Card title="Multi-Provider" icon="network-wired">
+    Switch between AI providers without code changes
+  </Card>
+  <Card title="Caching" icon="database">
+    Automatic response caching to reduce costs
+  </Card>
+  <Card title="Rate Limiting" icon="gauge">
+    Built-in rate limiting and retry logic
+  </Card>
+  <Card title="Observability" icon="chart-line">
+    Track usage, costs, and performance
+  </Card>
+</CardGroup>
+
+## Model Selection Guide
+
+### When to Use Each Model
+
+<AccordionGroup>
+  <Accordion title="Claude Sonnet" icon="brain">
+    **Best for:**
+    - Complex feedback analysis
+    - Multi-step reasoning tasks
+    - Detailed content generation
+    - High-accuracy requirements
+
+    **Characteristics:**
+    - Highest quality output
+    - Longer context window
+    - Higher cost per token
+  </Accordion>
+
+  <Accordion title="Claude Haiku" icon="bolt">
+    **Best for:**
+    - Real-time interactions
+    - Simple classification tasks
+    - Quick responses in Slack
+    - High-volume operations
+
+    **Characteristics:**
+    - Fast response times
+    - Lower cost
+    - Good for straightforward tasks
+  </Accordion>
+
+  <Accordion title="GPT-4o Mini" icon="circle-dollar">
+    **Best for:**
+    - Cost-sensitive operations
+    - Simple text generation
+    - Embeddings and search
+    - Batch processing
+
+    **Characteristics:**
+    - Most cost-effective
+    - Good general performance
+    - OpenAI ecosystem integration
+  </Accordion>
+</AccordionGroup>
+
+## Using AI SDK in Your Code
+
+### Basic Text Generation
+
+```typescript
+import { generateText } from "ai";
+import { claudeSonnet } from "@feedback/ai/models";
+
+const result = await generateText({
+  model: claudeSonnet,
+  prompt: "Analyze this customer feedback and extract key themes.",
+  system: "You are a product manager analyzing customer feedback.",
+});
+
+console.log(result.text);
+```
+
+### Streaming Responses
+
+```typescript
+import { streamText } from "ai";
+import { claudeHaiku } from "@feedback/ai/models";
+
+const stream = await streamText({
+  model: claudeHaiku,
+  prompt: "Summarize this feedback thread.",
+});
+
+for await (const chunk of stream.textStream) {
+  process.stdout.write(chunk);
+}
+```
+
+### Structured Output with Zod
+
+```typescript
+import { generateObject } from "ai";
+import { claudeSonnet } from "@feedback/ai/models";
+import { z } from "zod";
+
+const feedbackSchema = z.object({
+  severity: z.enum(["low", "medium", "high"]),
+  category: z.string(),
+  summary: z.string(),
+  actionItems: z.array(z.string()),
+});
+
+const result = await generateObject({
+  model: claudeSonnet,
+  schema: feedbackSchema,
+  prompt: "Analyze this customer feedback: ...feedback text...",
+});
+
+console.log(result.object);
+// { severity: "high", category: "Performance", ... }
+```
+
+## Tool Calling
+
+AI SDK supports structured tool calling for AI-driven actions:
+
+```typescript
+import { generateText } from "ai";
+import { claudeSonnet } from "@feedback/ai/models";
+import { z } from "zod";
+
+const result = await generateText({
+  model: claudeSonnet,
+  prompt: "Create a new feedback item for slow dashboard performance",
+  tools: {
+    createFeedback: {
+      description: "Create a new feedback item",
+      parameters: z.object({
+        title: z.string(),
+        description: z.string(),
+        severity: z.enum(["low", "medium", "high"]),
+      }),
+      execute: async ({ title, description, severity }) => {
+        // Database insertion logic
+        return { success: true, id: "feedback-123" };
+      },
+    },
+  },
+});
+```
+
+## Development Tools
+
+In development mode, AI SDK DevTools provide visibility into AI operations:
+
+```typescript
+import { devToolsMiddleware } from "@ai-sdk/devtools";
+
+const model = wrapLanguageModel({
+  model: gateway("anthropic/claude-sonnet-4-20250514"),
+  middleware: [devToolsMiddleware()],
+});
+```
+
+### DevTools Features
+
+- **Request/Response Logging** - See all AI interactions
+- **Token Usage Tracking** - Monitor costs in real-time
+- **Performance Metrics** - Measure latency and throughput
+- **Prompt Debugging** - Iterate on prompts quickly
+
+<Warning>
+  DevTools are automatically disabled in production for security and performance.
+</Warning>
+
+## Cost Optimization
+
+### Best Practices
+
+<Steps>
+  <Step title="Choose the right model">
+    Use Claude Haiku or GPT-4o Mini for simple tasks, reserve Sonnet for complex analysis.
+  </Step>
+
+  <Step title="Implement caching">
+    AI Gateway automatically caches responses, but structure prompts for cache hits.
+  </Step>
+
+  <Step title="Use streaming for UX">
+    Stream responses in user-facing features to improve perceived performance.
+  </Step>
+
+  <Step title="Batch operations">
+    Process multiple items together when possible to reduce overhead.
+  </Step>
+
+  <Step title="Set max tokens">
+    Limit maximum response length to prevent unexpectedly large costs.
+  </Step>
+</Steps>
+
+### Token Limits
+
+```typescript
+const result = await generateText({
+  model: claudeHaiku,
+  prompt: "Summarize briefly",
+  maxTokens: 100, // Limit response length
+});
+```
+
+## Error Handling
+
+Handle AI errors gracefully:
+
+```typescript
+import { generateText } from "ai";
+import { claudeSonnet } from "@feedback/ai/models";
+
+try {
+  const result = await generateText({
+    model: claudeSonnet,
+    prompt: "Analyze feedback",
+  });
+  return result.text;
+} catch (error) {
+  if (error instanceof Error) {
+    console.error("AI generation failed:", error.message);
+  }
+  // Fallback logic
+  return "Unable to generate analysis";
+}
+```
+
+## Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Parallel Requests" icon="arrows-split-up-and-left">
+    Process independent AI requests in parallel using `Promise.all`
+  </Card>
+  <Card title="Timeout Handling" icon="clock">
+    Set reasonable timeouts for AI operations to prevent hanging requests
+  </Card>
+  <Card title="Retry Logic" icon="rotate">
+    Implement exponential backoff for transient failures
+  </Card>
+  <Card title="Monitoring" icon="chart-line">
+    Track AI usage metrics to identify optimization opportunities
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Vector Search" icon="magnifying-glass" href="/integrations/vector-search">
+    Use embeddings for semantic search
+  </Card>
+  <Card title="Slack Integration" icon="slack" href="/integrations/slack">
+    Build AI-powered Slack workflows
+  </Card>
+</CardGroup>

@@ -1,80 +1,360 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Deploy GTM Feedback to Vercel and start collecting product feedback in minutes
 ---
 
-## Get started in three steps
+Get GTM Feedback up and running in minutes with our one-click Vercel deployment. This guide will walk you through deploying the web app, configuring essential services, and submitting your first feedback.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+This quickstart focuses on the web app (`apps/www`). The Slack integration is optional and can be added later.
+</Note>
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, you'll need:
+
+- A [Vercel account](https://vercel.com/signup)
+- A [Google OAuth application](https://console.cloud.google.com/apis/credentials) for authentication
+- An [OpenAI API key](https://platform.openai.com/api-keys) for AI features
+
+## Deploy to Vercel
+
+Click the deploy button below to clone the repository and deploy to Vercel:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/vercel-labs/oss-gtm-feedback&root-directory=apps/www&project-name=gtm-feedback&repository-name=gtm-feedback&integration-ids=oac_3sK3gnG06emjIEVL09jjntDD&skippable-integrations=1&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-vector%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+
+This will automatically provision:
+
+- **Neon Postgres** database
+- **Upstash KV** for Redis caching
+- **Upstash Vector** for semantic search
+
+<Steps>
+  <Step title="Configure environment variables">
+    During deployment, you'll be prompted to set the following environment variables:
+
+    ### Required variables
+
+    <CodeGroup>
+    ```bash Database
+    # Neon Postgres connection string (auto-provisioned)
+    DATABASE_URL=postgres://user:pass@host/db
+    ```
+
+    ```bash Authentication
+    # Google OAuth credentials
+    AUTH_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+    AUTH_GOOGLE_SECRET=your-client-secret
+
+    # NextAuth secret (generate with: openssl rand -base64 32)
+    AUTH_SECRET=your-random-secret-here
+    ```
+
+    ```bash AI Provider
+    # OpenAI API key for embeddings and AI agents
+    OPENAI_API_KEY=sk-...
+    ```
+
+    ```bash Upstash (auto-provisioned)
+    # Upstash Redis (KV)
+    KV_REST_API_URL=https://...
+    KV_REST_API_TOKEN=...
+    KV_REST_API_READ_ONLY_TOKEN=...
+    KV_URL=...
+
+    # Upstash Vector
+    UPSTASH_VECTOR_REST_URL=https://...
+    UPSTASH_VECTOR_REST_TOKEN=...
+    ```
+    </CodeGroup>
+
+    ### Optional variables
+
+    ```bash
+    # Slack integration (optional - for notifications)
+    SLACK_APP_VERIFICATION=your-shared-secret
+    SLACK_BOT_TOKEN=xoxb-...
+    SLACK_DIGEST_CHANNEL_ID=C...
+    SLACK_GTM_FEEDBACK_CHANNEL_ID=C...
+
+    # Cron jobs (optional - for scheduled tasks)
+    CRON_SECRET=your-cron-secret
+
+    # External API verification (optional)
+    EXTERNAL_API_VERIFICATION=your-api-secret
+
+    # App URL (optional - auto-detected on Vercel)
+    NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
+
+    # System user ID (optional - used for automated actions)
+    SYSTEM_USER_ID=00000000-0000-0000-0000-000000000001
+    ```
+
+    <Info>
+    The Vercel deployment automatically provisions Neon Postgres, Upstash KV, and Upstash Vector. You only need to provide Google OAuth and OpenAI credentials.
+    </Info>
+  </Step>
+
+  <Step title="Set up Google OAuth">
+    To enable authentication, create a Google OAuth application:
+
+    1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+    2. Create a new project or select an existing one
+    3. Navigate to "Credentials" and click "Create Credentials" > "OAuth client ID"
+    4. Select "Web application" as the application type
+    5. Add your authorized redirect URI:
+       ```
+       https://your-deployment-url.vercel.app/api/auth/callback/google
+       ```
+    6. Copy the **Client ID** and **Client Secret** to your environment variables
+
+    <Warning>
+    Make sure to update the redirect URI with your actual Vercel deployment URL after the initial deployment.
+    </Warning>
+  </Step>
+
+  <Step title="Run database migrations">
+    After deployment, you need to push the database schema:
+
+    <Tabs>
+      <Tab title="From local machine">
+        ```bash
+        # Clone your repository
+        git clone https://github.com/your-username/gtm-feedback.git
+        cd gtm-feedback
+
+        # Install dependencies
+        pnpm install
+
+        # Create .env file in packages/database
+        echo "DATABASE_URL=your-neon-postgres-url" > packages/database/.env
+
+        # Push schema to database
+        pnpm db:push
+        ```
+      </Tab>
+      <Tab title="From Vercel">
+        You can also run migrations using Vercel's build command:
+
+        1. Go to your project settings in Vercel
+        2. Add `pnpm db:push` to the install command
+        3. Redeploy your project
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Seed demo data (optional)">
+    To get started quickly, you can seed the database with realistic demo data:
+
+    ```bash
+    # Seed demo data and generate embeddings
+    pnpm db:seed
+    ```
+
+    This will create:
+    - 5 internal users (including a system user)
+    - 8 product areas for a B2B analytics SaaS
+    - 10 customer accounts with varied ARR and segments
+    - ~30 opportunities across those accounts
+    - 15 feature requests spanning different product areas
+    - ~75 customer feedback entries linked to requests and accounts
+
+    <Info>
+    The seed script automatically generates vector embeddings for feature requests if `OPENAI_API_KEY` and Upstash Vector credentials are configured.
+    </Info>
+  </Step>
+</Steps>
+
+## First login
+
+Once deployment is complete:
+
+1. Visit your Vercel deployment URL
+2. Click "Sign in with Google"
+3. Authorize with your Google account
+4. You'll be redirected to the feedback dashboard
+
+<Warning>
+The first user to sign in becomes an admin by default. Make sure to sign in with your own account first.
+</Warning>
+
+## Submit your first feedback
+
+Now that you're logged in, let's submit your first piece of feedback:
+
+<Steps>
+  <Step title="Navigate to the feedback form">
+    Click the "New Feedback" button in the top right corner of the dashboard.
+  </Step>
+
+  <Step title="Fill in the details">
+    Provide the following information:
+
+    - **Title**: A brief description of the feedback
+    - **Description**: Detailed explanation of the customer request
+    - **Account**: Select or create a customer account
+    - **Opportunity**: (Optional) Link to a sales opportunity
+    - **Product Area**: Select the relevant product area
+    - **Severity**: Choose the impact level (low, medium, high)
+  </Step>
+
+  <Step title="Submit and watch the AI work">
+    After submitting, the system will:
+
+    1. Generate a vector embedding of your feedback
+    2. Search for semantically similar feature requests
+    3. Use an AI agent to evaluate match quality
+    4. Either:
+       - Automatically add to an existing request (high confidence)
+       - Ask for human approval (medium confidence)
+       - Create a new feature request (low confidence)
+
+    <Info>
+    If you enabled the Slack integration, you'll receive notifications in Slack for approval workflows.
+    </Info>
+  </Step>
+</Steps>
+
+## Understanding the workflow
+
+Here's what happens behind the scenes when feedback is submitted:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Web App
+    participant Workflow
+    participant AI Agent
+    participant Vector DB
+    participant Slack
+
+    User->>Web App: Submit feedback
+    Web App->>Workflow: Trigger processing
+    Workflow->>AI Agent: Generate embedding
+    AI Agent->>Vector DB: Semantic search
+    Vector DB-->>AI Agent: Similar requests
+    AI Agent->>Workflow: Match + confidence
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    alt High confidence (≥0.9)
+        Workflow->>Web App: Auto-add to request
+    else Medium confidence (0.8-0.9)
+        Workflow->>Slack: Request approval
+        Slack-->>Workflow: Approved/Rejected
+    else Low confidence (<0.8)
+        Workflow->>AI Agent: Create new request
+        AI Agent->>Slack: Proposal for review
+    end
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Configure Slack integration" icon="slack" href="/deployment/slack-app">
+    Set up the Slack app to capture feedback from emoji reactions and enable approval workflows
+  </Card>
+  <Card title="Customize product areas" icon="grid" href="/features/product-areas">
+    Define your own product areas to match your organization's structure
+  </Card>
+  <Card title="Manage accounts" icon="building" href="/features/accounts-opportunities">
+    Import your customer accounts and opportunities for ARR-weighted prioritization
+  </Card>
+  <Card title="View insights" icon="chart-line" href="/features/analytics-insights">
+    Explore AI-generated insights reports for each product area
+  </Card>
 </CardGroup>
 
+## Local development
+
+If you prefer to develop locally instead of deploying to Vercel:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/vercel-labs/oss-gtm-feedback.git
+    cd oss-gtm-feedback
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    pnpm install
+    ```
+
+    <Info>
+    This project requires **pnpm 10+** and **Node.js 20+**. Other package managers are not supported.
+    </Info>
+  </Step>
+
+  <Step title="Set up environment variables">
+    Create `.env` files for the apps:
+
+    ```bash
+    # Web app environment
+    cp apps/www/.env.example apps/www/.env
+
+    # Database environment
+    cp packages/database/.env.example packages/database/.env
+    ```
+
+    Edit the files and add your credentials (see the environment variables section above).
+  </Step>
+
+  <Step title="Push database schema and seed data">
+    ```bash
+    # Push schema to database
+    pnpm db:push
+
+    # Seed demo data (optional)
+    pnpm db:seed
+    ```
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    pnpm dev
+    ```
+
+    The web app will be available at [http://localhost:3000](http://localhost:3000).
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database connection errors">
+    If you see database connection errors:
+
+    1. Verify your `DATABASE_URL` is correct in both `apps/www/.env` and `packages/database/.env`
+    2. Make sure your database is accessible from Vercel (check IP allowlist if using Neon)
+    3. Run `pnpm db:push` to ensure the schema is up to date
+  </Accordion>
+
+  <Accordion title="OAuth redirect errors">
+    If Google OAuth isn't working:
+
+    1. Verify the redirect URI in Google Cloud Console matches your deployment URL exactly
+    2. Make sure `AUTH_SECRET` is set (generate with `openssl rand -base64 32`)
+    3. Check that both `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_SECRET` are set correctly
+  </Accordion>
+
+  <Accordion title="AI features not working">
+    If semantic matching or insights aren't working:
+
+    1. Verify your `OPENAI_API_KEY` is valid and has credits
+    2. Make sure Upstash Vector is configured with `UPSTASH_VECTOR_REST_URL` and `UPSTASH_VECTOR_REST_TOKEN`
+    3. Run `pnpm db:seed` to generate embeddings for demo data
+  </Accordion>
+
+  <Accordion title="Build failures">
+    If the build fails:
+
+    1. Make sure you're using **Node.js 20+** and **pnpm 10+**
+    2. Clear the build cache: `pnpm clean` (if available) or `rm -rf .next node_modules`
+    3. Reinstall dependencies: `pnpm install`
+    4. Check for TypeScript errors: `pnpm typecheck`
+  </Accordion>
+</AccordionGroup>
+
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+For more help, check the [Contributing guide](https://github.com/vercel-labs/oss-gtm-feedback/blob/main/CONTRIBUTING.md) or open an issue on GitHub.
 </Note>

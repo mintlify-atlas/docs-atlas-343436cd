@@ -1,0 +1,348 @@
+---
+title: "Area Insights Workflow"
+description: "Generate AI-powered analytics and insights for product areas on a daily schedule"
+---
+
+## Overview
+
+The Area Insights workflow automatically generates comprehensive analytics reports for each product area using AI. It runs daily via cron job to provide teams with up-to-date insights about customer feedback trends, feature request priorities, and product area health.
+
+<Info>
+  **Located at**: `apps/www/src/workflows/area-insights/index.ts`
+</Info>
+
+## Purpose
+
+This workflow solves the challenge of maintaining current, actionable insights across multiple product areas without manual reporting work. By analyzing all open requests in each area, it generates:
+
+- **Trend analysis**: What customers are requesting most
+- **Priority recommendations**: Which features to focus on
+- **Customer sentiment**: Aggregate feedback patterns
+- **Request summaries**: Consolidated view of active work
+
+## Trigger Conditions
+
+The workflow is triggered by:
+
+- **Scheduled cron job**: Daily at 8:00 AM ET
+- **Manual invocation**: Via API or admin interface
+
+### Cron Configuration
+
+Typically configured in your deployment platform:
+
+```bash
+# Vercel cron (vercel.json)
+{
+  "crons": [{
+    "path": "/api/cron/area-insights",
+    "schedule": "0 8 * * *"  // 8 AM ET daily
+  }]
+}
+```
+
+## Execution Steps
+
+<Steps>
+  <Step title="Fetch Product Areas">
+    Retrieves all product areas from the database:
+    
+    ```typescript
+    const areas = await getAllProductAreas();
+    const areasWithSlugs = areas.filter(
+      (area) => typeof area.slug === "string" && area.slug.length > 0
+    );
+    ```
+    
+    Only processes areas with valid slugs, as insights are stored and accessed via slug-based URLs.
+  </Step>
+
+  <Step title="Parallel Processing">
+    Generates insights for all areas concurrently:
+    
+    ```typescript
+    const results = await Promise.all(
+      areasWithSlugs.map(async (area) => {
+        return await generateAreaInsightsStep({
+          slug: area.slug,
+          userId: SERVER_ENV.SYSTEM_USER_ID,
+        });
+      })
+    );
+    ```
+    
+    <Note>
+      Using `Promise.all` ensures all areas are processed simultaneously, completing the entire workflow faster than sequential processing.
+    </Note>
+  </Step>
+
+  <Step title="Generate Insights per Area">
+    For each product area, the `generateAreaInsightsStep` performs:
+    
+    1. **Query open requests**: Fetches all active feature requests in the area
+    2. **Aggregate feedback**: Collects associated customer feedback
+    3. **AI analysis**: Uses the area insights agent to generate report
+    4. **Cache results**: Stores insights in Redis for fast retrieval
+    
+    The step tracks execution time and returns:
+    ```typescript
+    {
+      success: boolean,
+      slug: string,
+      hasOpenRequests: boolean,
+      durationMs: number,
+      error?: string
+    }
+    ```
+  </Step>
+
+  <Step title="Aggregate Results">
+    Compiles success/failure statistics:
+    
+    ```typescript
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
+    
+    logger.info("Insights regeneration complete", {
+      succeeded: successful.length,
+      failed: failed.length,
+    });
+    ```
+  </Step>
+
+  <Step title="Return Summary">
+    Returns workflow execution summary:
+    
+    ```typescript
+    return {
+      status: "success",
+      processedCount: successful.length,
+      failedSlugs: failed.map((r) => r.slug),
+    };
+    ```
+    
+    Note that the workflow returns success even if some areas fail, allowing partial completion.
+  </Step>
+</Steps>
+
+## Code Example
+
+### Invoking the Workflow
+
+```typescript
+import { generateAllAreaInsightsWorkflow } from "@/workflows/area-insights";
+
+const result = await generateAllAreaInsightsWorkflow();
+
+console.log(result);
+// {
+//   status: "success",
+//   processedCount: 8,
+//   failedSlugs: []
+// }
+```
+
+### Accessing Generated Insights
+
+Insights are cached in Redis and accessed via API:
+
+```typescript
+// In your API route or component
+import { getAreaInsights } from "@/lib/area-insights/get";
+
+const insights = await getAreaInsights({ slug: "analytics-dashboard" });
+
+if (insights) {
+  console.log(insights.summary);
+  console.log(insights.topRequests);
+  console.log(insights.trends);
+}
+```
+
+## Workflow Step Reference
+
+<AccordionGroup>
+  <Accordion title="generateAreaInsightsStep">
+    **Purpose**: Generate and cache insights for a single product area
+    
+    **Location**: `apps/www/src/workflows/area-insights/steps/generate-area-insights.ts`
+    
+    **Implementation**:
+    ```typescript
+    export async function generateAreaInsightsStep({
+      slug,
+      userId,
+    }: {
+      slug: string;
+      userId: string;
+    }): Promise<GenerateAreaInsightsResult> {
+      "use step";
+      
+      return generateAreaInsightsUtil({ slug, userId });
+    }
+    ```
+    
+    Delegates to the utility function in `@/lib/area-insights/generate.ts` which:
+    - Queries database for area's open requests
+    - Aggregates associated feedback and account data
+    - Calls AI agent to analyze and generate insights
+    - Caches results in Redis with TTL
+    - Returns success status and duration metrics
+  </Accordion>
+
+  <Accordion title="getAllProductAreas">
+    **Purpose**: Fetch all product areas from the database
+    
+    **Location**: `apps/www/src/workflows/shared/get-all-product-areas.ts`
+    
+    **Returns**: Array of product areas with `id`, `name`, and `slug` fields
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required for workflow execution
+SYSTEM_USER_ID=user_system      # User ID for system-generated insights
+
+# AI configuration
+OPENAI_API_KEY=sk-...           # For insights generation agent
+
+# Redis configuration (via @feedback/redis)
+UPSTASH_REDIS_REST_URL=https://...
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+### Cache TTL
+
+Insights are cached in Redis with a time-to-live. Configure in your insights generation utility:
+
+```typescript
+// apps/www/src/lib/area-insights/generate.ts
+const INSIGHTS_CACHE_TTL = 60 * 60 * 24; // 24 hours
+
+await redis.setex(
+  `area-insights:${slug}`,
+  INSIGHTS_CACHE_TTL,
+  JSON.stringify(insights)
+);
+```
+
+### Logging
+
+The workflow uses structured logging:
+
+```typescript
+import { createLogger } from "@feedback/config/logger";
+
+const logger = createLogger("area-insights-cron");
+
+logger.info("Starting daily insights regeneration...");
+logger.info("Found areas to process", {
+  withSlugs: areasWithSlugs.length,
+  total: areas.length,
+});
+```
+
+## Error Handling
+
+The workflow gracefully handles failures at the area level:
+
+```typescript
+const results = await Promise.all(
+  areasWithSlugs.map(async (area) => {
+    try {
+      const result = await generateAreaInsightsStep({
+        slug: area.slug,
+        userId,
+      });
+      logger.info(`Processed area: ${area.slug}`, {
+        success: result.success,
+        durationMs: result.durationMs,
+      });
+      return result;
+    } catch (error) {
+      logger.error(`Unexpected error for ${area.slug}`, {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return {
+        success: false,
+        slug: area.slug,
+        hasOpenRequests: false,
+        durationMs: 0,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  })
+);
+```
+
+<Note>
+  If an area fails to generate insights, the workflow continues processing other areas. Failed areas are logged and returned in the summary.
+</Note>
+
+## Performance Considerations
+
+### Parallel Execution
+
+The workflow processes all areas concurrently using `Promise.all`. For a typical deployment with 8 product areas:
+
+- **Sequential**: ~40 seconds (5s per area × 8 areas)
+- **Parallel**: ~5-7 seconds (longest area + overhead)
+
+### Optimization Tips
+
+1. **Limit request count**: Only process open requests to reduce AI token usage
+2. **Cache results**: 24-hour TTL means insights are only regenerated once daily
+3. **Monitor duration**: Track `durationMs` to identify slow areas
+
+```typescript
+if (result.durationMs > 10000) {
+  logger.warn(`Slow insights generation for ${area.slug}`, {
+    durationMs: result.durationMs,
+  });
+}
+```
+
+## Monitoring & Observability
+
+Recommended monitoring:
+
+```typescript
+// Example monitoring wrapper
+const result = await generateAllAreaInsightsWorkflow();
+
+if (result.failedSlugs.length > 0) {
+  // Alert on failures
+  await sendAlert({
+    type: "area-insights-failures",
+    count: result.failedSlugs.length,
+    areas: result.failedSlugs,
+  });
+}
+
+// Track metrics
+await trackMetric("area-insights-processed", result.processedCount);
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Area Insights Agent" icon="chart-line" href="/api/agents/area-insights">
+    Learn about the AI agent that generates insights
+  </Card>
+  
+  <Card title="Product Areas Feature" icon="layer-group" href="/features/product-areas">
+    Understand product area management
+  </Card>
+  
+  <Card title="Analytics & Insights" icon="chart-bar" href="/features/analytics-insights">
+    See how insights appear in the UI
+  </Card>
+  
+  <Card title="Redis Package" icon="database" href="/api/packages/redis">
+    Learn about caching infrastructure
+  </Card>
+</CardGroup>

@@ -1,0 +1,199 @@
+---
+title: 'Requests table'
+description: 'Database schema reference for the requests table'
+keywords: ['requests', 'schema', 'database', 'table', 'drizzle']
+---
+
+## Overview
+
+The `requests` table stores feature requests and user feedback items. Each request has a title, description, status, and can be associated with areas, followers, and related links.
+
+## Fields
+
+<ResponseField name="id" type="uuid" required>
+  Primary key. Auto-generated UUID for the request.
+</ResponseField>
+
+<ResponseField name="title" type="text" required>
+  The title of the feature request.
+</ResponseField>
+
+<ResponseField name="description" type="text" required>
+  Detailed description of the feature request.
+</ResponseField>
+
+<ResponseField name="status" type="request_status" required>
+  Current status of the request. See [Enums](#enums) for possible values. Default: `open`.
+</ResponseField>
+
+<ResponseField name="creator" type="uuid">
+  Foreign key reference to `users.id`. The user who created the request.
+</ResponseField>
+
+<ResponseField name="createdAt" type="timestamp" required>
+  Timestamp with timezone when the request was created. Default: `now()`.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="timestamp" required>
+  Timestamp with timezone when the request was last updated. Default: `now()`.
+</ResponseField>
+
+<ResponseField name="slug" type="text" required>
+  URL-friendly unique identifier for the request. Must be unique.
+</ResponseField>
+
+<ResponseField name="notes" type="text">
+  Additional internal notes about the request.
+</ResponseField>
+
+<ResponseField name="areaIds" type="varchar(36)[]" required>
+  Array of area IDs associated with this request. Default: `[]`.
+</ResponseField>
+
+<ResponseField name="relatedLinks" type="text[]" required>
+  Array of external URLs related to this request. Default: `[]`.
+</ResponseField>
+
+<ResponseField name="linearUrl" type="text">
+  URL to the associated Linear issue, if any.
+</ResponseField>
+
+<ResponseField name="followers" type="uuid[]" required>
+  Array of user IDs following this request. Default: `[]`.
+</ResponseField>
+
+<ResponseField name="relatedRequestId" type="uuid">
+  Foreign key reference to another request in `requests.id`. Links related requests together.
+</ResponseField>
+
+<ResponseField name="metadata" type="jsonb">
+  Additional metadata stored as JSON.
+</ResponseField>
+
+## Enums
+
+### request_status
+
+The `status` field uses the `request_status` enum with the following values:
+
+- `open` - Request is active and being considered
+- `shipped` - Feature has been implemented and released
+- `deprioritized` - Request has been deprioritized
+
+## Relationships
+
+### Belongs to
+
+- **User** (creator): `requests.creator` → `users.id`
+- **Related Request** (self-referential): `requests.relatedRequestId` → `requests.id`
+
+### Has many
+
+- **Feedback**: Multiple feedback items can reference a single request via `feedback.requestId`
+
+## Indexes
+
+<ResponseField name="requests_slug_key" type="unique">
+  Unique constraint on the `slug` field.
+</ResponseField>
+
+<ResponseField name="requests_creator_idx" type="index">
+  B-tree index on `creator` field for faster queries by creator.
+</ResponseField>
+
+<ResponseField name="requests_updated_at_idx" type="index">
+  B-tree index on `updatedAt` field for sorting by modification time.
+</ResponseField>
+
+<ResponseField name="requests_area_ids_idx" type="gin">
+  GIN index on `areaIds` array for efficient array containment queries.
+</ResponseField>
+
+<ResponseField name="requests_related_links_idx" type="gin">
+  GIN index on `relatedLinks` array for efficient array searches.
+</ResponseField>
+
+<ResponseField name="requests_followers_idx" type="gin">
+  GIN index on `followers` array for efficient follower lookups.
+</ResponseField>
+
+<ResponseField name="requests_related_request_id_idx" type="index">
+  B-tree index on `relatedRequestId` for related request queries.
+</ResponseField>
+
+## Example queries
+
+### Query all open requests
+
+```typescript
+import { db } from './db';
+import { requests } from './schema';
+import { eq } from 'drizzle-orm';
+
+const openRequests = await db.query.requests.findMany({
+  where: eq(requests.status, 'open'),
+  orderBy: (requests, { desc }) => [desc(requests.updatedAt)],
+});
+```
+
+### Get request with creator and feedback
+
+```typescript
+import { db } from './db';
+import { requests } from './schema';
+import { eq } from 'drizzle-orm';
+
+const request = await db.query.requests.findFirst({
+  where: eq(requests.slug, 'my-feature-request'),
+  with: {
+    user: true,
+    feedback: {
+      with: {
+        user: true,
+        account: true,
+      },
+    },
+  },
+});
+```
+
+### Find requests by area
+
+```typescript
+import { db } from './db';
+import { requests } from './schema';
+import { arrayContains } from 'drizzle-orm';
+
+const requestsInArea = await db.query.requests.findMany({
+  where: arrayContains(requests.areaIds, ['area-id-here']),
+});
+```
+
+### Get requests followed by a user
+
+```typescript
+import { db } from './db';
+import { requests } from './schema';
+import { arrayContains } from 'drizzle-orm';
+
+const userId = 'user-uuid-here';
+const followedRequests = await db.query.requests.findMany({
+  where: arrayContains(requests.followers, [userId]),
+});
+```
+
+### Create a new request
+
+```typescript
+import { db } from './db';
+import { requests } from './schema';
+
+const newRequest = await db.insert(requests).values({
+  title: 'Add dark mode support',
+  description: 'Users want a dark mode option for better readability',
+  slug: 'add-dark-mode-support',
+  creator: 'user-uuid-here',
+  areaIds: ['ui-area-id'],
+  status: 'open',
+}).returning();
+```

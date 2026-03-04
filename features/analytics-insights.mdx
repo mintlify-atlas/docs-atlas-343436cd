@@ -1,0 +1,380 @@
+---
+title: Analytics & Insights
+description: AI-generated insights, weekly digests, and data-driven prioritization
+icon: chart-mixed
+---
+
+GTM Feedback provides AI-powered analytics to help you understand customer feedback patterns, prioritize features, and make data-driven product decisions.
+
+## Area Insights Reports
+
+Each product area automatically generates comprehensive AI insights.
+
+### What Gets Analyzed
+
+The insights engine analyzes:
+
+- **All feature requests** in the area
+- **Customer feedback** linked to those requests
+- **Account data** (ARR, enterprise status, region)
+- **Opportunity data** (stage, close date, deal value)
+- **Request metadata** (status, severity distribution)
+- **Trends over time** (feedback velocity, pattern changes)
+
+### Insight Sections
+
+Reports are organized into sections, each containing:
+
+<CardGroup cols={2}>
+  <Card title="Title" icon="heading">
+    Clear description of the theme or pattern identified.
+  </Card>
+  <Card title="Summary" icon="paragraph">
+    Detailed explanation of what the analysis found.
+  </Card>
+  <Card title="Importance" icon="star">
+    Rating: Critical, High, Medium, or Low priority.
+  </Card>
+  <Card title="Visuals" icon="chart-line">
+    Charts and metrics supporting the insight.
+  </Card>
+</CardGroup>
+
+### Example Insight Section
+
+```markdown
+Title: "Enterprise customers requesting advanced permissions"
+
+Summary: "15 enterprise accounts with $2.3M combined ARR have 
+requested granular role-based access controls. 3 opportunities 
+($850K ARR) cite this as a requirement for deal closure."
+
+Importance: High
+
+Visuals:
+- Top 5 requests by opportunity ARR
+- Dealbreaker count (3 critical)
+- Severity distribution chart
+```
+
+### Accessing Insights
+
+View area insights on the area page:
+
+<Steps>
+  <Step title="Navigate to area">
+    Go to `/areas/[slug]` for any product area.
+  </Step>
+  <Step title="Expand analytics">
+    Click the "Analytics" section to expand the insights panel.
+  </Step>
+  <Step title="Review sections">
+    Read through each insight section and associated data.
+  </Step>
+  <Step title="Regenerate if needed">
+    Click "Regenerate" to create fresh insights with latest data.
+  </Step>
+</Steps>
+
+<Note>
+Insights are cached and regenerated weekly via automated cron job. You can manually regenerate anytime.
+</Note>
+
+## Insight Visualizations
+
+Reports include multiple visualization types:
+
+### Top Requests Chart
+
+Shows the highest-impact feature requests:
+
+- Ranked by open opportunity ARR
+- Includes request title and metrics
+- Clickable links to full request pages
+- Displays severity distribution
+
+### Dealbreaker Metrics
+
+Highlights critical feedback:
+
+- Count of "high severity" feedback items
+- Opportunities at risk
+- Total ARR depending on these features
+- Customer segments most affected
+
+### Crunches Numbers Section
+
+Raw metrics and data:
+
+<Tabs>
+  <Tab title="Request Metrics">
+    - Total feature requests
+    - Status breakdown (open/shipped/deprioritized)
+    - Average feedback per request
+    - Requests with high-severity feedback
+  </Tab>
+  <Tab title="Feedback Metrics">
+    - Total feedback items
+    - Severity distribution
+    - Unique accounts providing feedback
+    - Feedback velocity (items per week)
+  </Tab>
+  <Tab title="Business Metrics">
+    - Total ARR from feedback accounts
+    - Open opportunity ARR
+    - Enterprise account engagement
+    - Average deal size
+  </Tab>
+</Tabs>
+
+## Weekly Digests
+
+Automated weekly summaries sent to your team via Slack.
+
+### Digest Contents
+
+Each weekly digest includes:
+
+<AccordionGroup>
+  <Accordion title="Top Product Areas">
+    The 3 areas with most activity:
+    - Request count for the week
+    - New feedback items
+    - Links to area pages
+  </Accordion>
+  
+  <Accordion title="New Feature Requests">
+    All requests created during the week:
+    - Request title and link
+    - Creator name
+    - Assigned product areas
+  </Accordion>
+  
+  <Accordion title="New Feedback">
+    Recent customer feedback highlights:
+    - Account name
+    - Feature request title
+    - Link to view details
+    - Unique accounts (deduplicated)
+  </Accordion>
+  
+  <Accordion title="Product Area Metrics">
+    Detailed breakdown per area:
+    - Total requests in area
+    - New feedback this week
+    - Top movers (most active areas)
+  </Accordion>
+</AccordionGroup>
+
+### Digest Schedule
+
+Digests are sent:
+
+- **Automatically** every Monday morning
+- **Via Slack** to configured channel
+- **With clickable links** to all referenced items
+- **Only when there's activity** (no empty digests)
+
+### Configuring Digests
+
+Set up weekly digests:
+
+1. Configure `SLACK_DIGEST_CHANNEL_ID` environment variable
+2. Point to your team's digest channel (e.g., `#product-digest`)
+3. Digests will post automatically on schedule
+
+<Info>
+Digests use the weekly-digest cron workflow. See `/api/cron/weekly-digest` for implementation.
+</Info>
+
+## Dashboard Features
+
+The main dashboard provides overview analytics:
+
+### Request Overview
+
+- **Total requests** across all areas
+- **Status distribution** (pie chart)
+- **Recent activity** (timeline)
+- **Top areas by volume** (bar chart)
+
+### Feedback Overview
+
+- **Total feedback items** collected
+- **Severity breakdown** (stacked chart)
+- **Top accounts** by feedback count
+- **Feedback trends** over time
+
+### Business Impact
+
+- **Total ARR** from engaged accounts
+- **Opportunity pipeline** linked to requests
+- **Enterprise engagement** metrics
+- **Regional distribution** of feedback
+
+## AI Generation Process
+
+How insights are created:
+
+<Steps>
+  <Step title="Data collection">
+    System gathers all requests, feedback, and CRM data for the area.
+  </Step>
+  <Step title="Analysis">
+    AI model analyzes patterns, themes, and business impact:
+    - Clusters similar requests
+    - Identifies high-value patterns
+    - Calculates importance scores
+    - Detects trends and anomalies
+  </Step>
+  <Step title="Visualization generation">
+    Creates charts and metrics:
+    - Top requests ranking
+    - Dealbreaker counts
+    - ARR distribution
+    - Severity breakdowns
+  </Step>
+  <Step title="Report assembly">
+    Combines sections into coherent report:
+    - Orders by importance
+    - Links to supporting data
+    - Generates readable summaries
+    - Caches for fast access
+  </Step>
+</Steps>
+
+<Warning>
+Insight generation requires sufficient data. Areas with fewer than 3 requests may not generate meaningful insights.
+</Warning>
+
+## Insights Feedback
+
+Help improve the AI insights:
+
+### Rating Insights
+
+At the bottom of each insight report:
+
+1. **Thumbs up** - Insights were helpful
+2. **Thumbs down** - Insights need improvement
+3. **Optional comment** - Explain what was good/bad
+
+### What Happens with Feedback
+
+Your feedback:
+
+- Posts to internal Slack channel
+- Includes your name and area
+- Helps tune the AI model
+- Informs future improvements
+
+<Tip>
+Be specific in comments: "Missing key customer: Acme Corp" or "Great catch on the authentication theme!"
+</Tip>
+
+## Prioritization Metrics
+
+Use these metrics to prioritize features:
+
+### ARR-Based Priority
+
+<ParamField path="Open Opportunity ARR" type="number">
+  Revenue at risk if feature isn't delivered. Direct signal of urgency.
+  
+  **Use for:** Deal-driven prioritization
+</ParamField>
+
+<ParamField path="Account ARR" type="number">
+  Total revenue from customers requesting this. Shows market demand.
+  
+  **Use for:** Strategic prioritization
+</ParamField>
+
+### Volume-Based Priority
+
+<ParamField path="Feedback Count" type="number">
+  How many customers are asking. Indicates breadth of need.
+  
+  **Use for:** Popular demand signals
+</ParamField>
+
+<ParamField path="High Severity Count" type="number">
+  Number of critical/urgent requests. Shows pain level.
+  
+  **Use for:** Customer satisfaction urgency
+</ParamField>
+
+### Strategic Priority
+
+<ParamField path="Enterprise Count" type="number">
+  Number of enterprise customers requesting. Strategic account focus.
+  
+  **Use for:** Enterprise customer retention
+</ParamField>
+
+<ParamField path="Opportunity Close Date" type="date">
+  Nearest opportunity close date. Creates timeline urgency.
+  
+  **Use for:** Sales deadline prioritization
+</ParamField>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Review insights weekly">
+    Make area insights part of your planning:
+    - Check before sprint planning
+    - Review with product leads
+    - Share with engineering teams
+    - Track changes over time
+  </Accordion>
+  
+  <Accordion title="Combine metrics">
+    Don't rely on single metrics:
+    - High ARR + High severity = Critical
+    - High volume + Low ARR = Nice-to-have
+    - Enterprise + Close deadline = Urgent
+    - Low all metrics = Deprioritize
+  </Accordion>
+  
+  <Accordion title="Regenerate before big decisions">
+    Get fresh insights when:
+    - Planning quarterly roadmaps
+    - Preparing for stakeholder reviews
+    - Evaluating major initiatives
+    - Responding to market changes
+  </Accordion>
+  
+  <Accordion title="Provide feedback on insights">
+    Help improve the AI:
+    - Rate every report you read
+    - Leave specific comments
+    - Note missing patterns
+    - Highlight particularly useful sections
+  </Accordion>
+  
+  <Accordion title="Use digests for team alignment">
+    Leverage weekly digests:
+    - Post in team standups
+    - Include in planning docs
+    - Forward to stakeholders
+    - Track trends week-over-week
+  </Accordion>
+</AccordionGroup>
+
+## API Access
+
+Programmatic access to insights:
+
+```bash
+# Get area insights
+GET /api/areas/[slug]/insights
+
+# Get raw analytics data  
+GET /api/areas/[slug]/analytics/raw
+
+# Trigger regeneration
+POST /api/areas/[slug]/insights/regenerate
+```
+
+See [API Reference](/api/workflows/area-insights) for full documentation.

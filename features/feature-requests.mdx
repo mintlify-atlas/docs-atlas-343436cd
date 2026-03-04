@@ -1,0 +1,250 @@
+---
+title: Feature Requests
+description: Create and manage feature requests with status tracking, product areas, and follower notifications
+icon: lightbulb
+---
+
+Feature requests are the core organizational unit in GTM Feedback. They represent specific features or improvements that customers are asking for.
+
+## Creating Requests
+
+Create a new feature request through the web UI:
+
+<Steps>
+  <Step title="Open the request form">
+    Click the "Add Request" button or navigate to the requests page.
+  </Step>
+  <Step title="Fill in request details">
+    Complete the form with:
+    - **Title** (required): Clear, concise feature name (max 200 characters)
+    - **Description** (required): What the feature does and why it matters (max 1000 characters)
+    - **Product Areas** (required): One or more areas this feature belongs to
+    - **Related Links** (optional): Links to PRDs, design docs, etc. (one per line)
+    - **Linear URL** (optional): Link to your Linear issue
+  </Step>
+  <Step title="Submit">
+    Create the request - you'll automatically become a follower.
+  </Step>
+</Steps>
+
+<Info>
+Request titles must be unique. The system will generate a URL-friendly slug from the title.
+</Info>
+
+## Request Details
+
+Each feature request page displays comprehensive information:
+
+### Header Metrics
+
+Key metrics displayed at the top:
+
+<CardGroup cols={3}>
+  <Card title="Feedback Count" icon="comments">
+    Total number of customer feedback items linked to this request.
+  </Card>
+  <Card title="Open Opportunity ARR" icon="dollar-sign">
+    Total ARR from all open sales opportunities associated with feedback.
+  </Card>
+  <Card title="Product Areas" icon="grid">
+    Areas this feature belongs to (clickable to filter).
+  </Card>
+</CardGroup>
+
+### Feedback List
+
+All customer feedback for this request, organized by:
+- **Severity** (High → Medium → Low)
+- **Creation date** (newest first within each severity)
+
+Each feedback item shows:
+- Account name and logo
+- Customer pain description
+- Severity indicator
+- Creator and date
+
+## Status Management
+
+Feature requests have three possible statuses:
+
+<Tabs>
+  <Tab title="Open">
+    <div className="p-4">
+      **Active requests** that are being considered or planned.
+      
+      - Default status for new requests
+      - Shown with blue badge
+      - Visible in all standard views
+    </div>
+  </Tab>
+  <Tab title="Shipped">
+    <div className="p-4">
+      **Completed features** that have been delivered.
+      
+      - Indicates the feature is live
+      - Shown with green badge
+      - Triggers notification workflow to all followers
+      - Sends Slack DMs to followers
+    </div>
+  </Tab>
+  <Tab title="Deprioritized">
+    <div className="p-4">
+      **Requests that won't be built** in the foreseeable future.
+      
+      - Used for requests that are no longer priorities
+      - Shown with gray badge
+      - Can be filtered out in list views
+    </div>
+  </Tab>
+</Tabs>
+
+<Warning>
+Changing status to "Shipped" sends notifications to all followers. Use this thoughtfully.
+</Warning>
+
+## Product Areas Assignment
+
+Requests must be assigned to at least one product area:
+
+### Why Product Areas Matter
+
+1. **Organization** - Group related requests together
+2. **Analytics** - Generate insights per area
+3. **Notifications** - Route to area-specific Slack channels
+4. **Ownership** - Assign areas to product teams
+
+### Managing Areas
+
+- Select multiple areas when creating or editing a request
+- Areas are clickable badges that link to area pages
+- Filter requests by area in list views
+
+<Tip>
+Assign requests to the primary area first, then add secondary areas as needed.
+</Tip>
+
+## Follower System
+
+Stay updated on feature requests by following them:
+
+### Automatic Following
+
+<AccordionGroup>
+  <Accordion title="When you create a request">
+    You automatically follow any request you create.
+  </Accordion>
+  <Accordion title="When you add feedback">
+    You automatically follow the request when adding feedback to it.
+  </Accordion>
+</AccordionGroup>
+
+### Manual Following
+
+- Click the "Follow" button on any request page
+- Unfollow anytime by clicking "Unfollow"
+- View your followed requests in your user profile
+
+### Follower Notifications
+
+Followers receive notifications when:
+- Request status changes to "Shipped"
+- Major updates are made (coming soon)
+
+<Note>
+Notifications are sent via Slack DM to users with connected Slack accounts.
+</Note>
+
+## Editing Requests
+
+<Warning>
+Only admins and the request creator can edit requests.
+</Warning>
+
+Editable fields:
+- Title
+- Description
+- Product areas
+- Related links
+- Linear URL
+
+<Note>
+Editing the title will update the URL slug. Old URLs will no longer work.
+</Note>
+
+## Related Requests
+
+When AI detects that feedback might match multiple feature requests, it suggests related requests:
+
+1. **Review suggestion** - Check if the suggested match is better
+2. **Accept** - Link the feedback to the suggested request
+3. **Dismiss** - Keep the current assignment
+
+This helps consolidate duplicate or very similar feature requests.
+
+## Request Insights
+
+Each request page provides insights:
+
+### ARR Tracking
+
+See the total ARR associated with the request from:
+- Open opportunities linked to feedback
+- Account ARR for all providing feedback
+
+### Feedback Distribution
+
+Understand severity distribution:
+- Count of high/medium/low severity feedback
+- Visual indicators for severity levels
+- Quick scan of customer priority
+
+## Search and Discovery
+
+Find requests through:
+
+### Global Search
+
+Search across all requests by title and description at `/search`.
+
+### Area Pages
+
+Browse requests within a specific product area at `/areas/[slug]`.
+
+### User Pages
+
+See requests created by a specific team member at `/user/[userId]`.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Write clear titles">
+    Use concise, specific titles that clearly describe the feature:
+    - ✅ "Export customer feedback to CSV"
+    - ✅ "Support SSO with Okta"
+    - ❌ "Better reports"
+    - ❌ "Improve the thing"
+  </Accordion>
+  
+  <Accordion title="Provide context in descriptions">
+    Explain:
+    - What the feature does
+    - Why customers need it
+    - What outcome it enables
+    - Any constraints or requirements
+  </Accordion>
+  
+  <Accordion title="Link related resources">
+    Add links to:
+    - Product requirement documents
+    - Design mockups
+    - Customer research
+    - Engineering specs
+    - Linear/Jira issues
+  </Accordion>
+  
+  <Accordion title="Keep areas focused">
+    - Assign to 1-3 areas maximum
+    - Choose the most specific area available
+    - Create new areas if needed for better organization
+  </Accordion>
+</AccordionGroup>

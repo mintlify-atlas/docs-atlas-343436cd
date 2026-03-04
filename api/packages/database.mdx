@@ -1,0 +1,483 @@
+---
+title: '@feedback/db'
+description: 'Database package with Drizzle ORM schema, types, and client for GTM Feedback'
+---
+
+## Overview
+
+The `@feedback/db` package provides the database layer for GTM Feedback, built on Drizzle ORM with PostgreSQL. It includes schema definitions, type-safe queries, and relation mappings for users, requests, feedback, areas, and Salesforce data.
+
+## Installation
+
+```bash
+npm install @feedback/db
+```
+
+## Package Information
+
+<ParamField path="name" type="string">
+  @feedback/db
+</ParamField>
+
+<ParamField path="version" type="string">
+  0.0.1
+</ParamField>
+
+<ParamField path="dependencies" type="object">
+  - `drizzle-orm`: ^0.44.5
+  - `pg`: ^8.16.3
+  - `@auth/core`: ^0.41.1
+</ParamField>
+
+## Exports
+
+The package provides multiple export paths:
+
+### Main Export
+
+```typescript
+import { db } from '@feedback/db'
+```
+
+<ResponseField name="db" type="DrizzleDB">
+  Pre-configured Drizzle database client with full schema and relations. Ready to use with type-safe queries.
+</ResponseField>
+
+### Schema
+
+```typescript
+import {
+  users,
+  accounts,
+  sessions,
+  authenticators,
+  requests,
+  feedback,
+  areas,
+  sfdcAccounts,
+  sfdcOpportunities,
+  requestStatusEnum,
+  severityEnum,
+  feedbackCreationSourceEnum
+} from '@feedback/db/schema'
+```
+
+<ResponseField name="users" type="PgTable">
+  User accounts table with authentication details
+  
+  **Columns:**
+  - `id` (uuid): Primary key
+  - `name` (text): User's full name
+  - `email` (text): Unique email address
+  - `image` (text, optional): Profile image URL
+  - `avatar` (text, optional): Avatar URL
+  - `emailVerified` (timestamp, optional): Email verification timestamp
+  - `isAdmin` (boolean): Admin flag (default: false)
+</ResponseField>
+
+<ResponseField name="requests" type="PgTable">
+  Feature requests table
+  
+  **Columns:**
+  - `id` (uuid): Primary key
+  - `title` (text): Request title
+  - `description` (text): Detailed description
+  - `status` (requestStatusEnum): 'open' | 'shipped' | 'deprioritized'
+  - `creator` (uuid): Foreign key to users
+  - `createdAt` (timestamp): Creation timestamp
+  - `updatedAt` (timestamp): Last update timestamp
+  - `slug` (text): Unique URL-friendly identifier
+  - `notes` (text, optional): Internal notes
+  - `areaIds` (varchar[]): Array of product area IDs
+  - `relatedLinks` (text[]): Array of related URLs
+  - `linearUrl` (text, optional): Linear issue URL
+  - `followers` (uuid[]): Array of user IDs following this request
+  - `relatedRequestId` (uuid, optional): Parent/related request
+  - `metadata` (jsonb, optional): Additional metadata
+</ResponseField>
+
+<ResponseField name="feedback" type="PgTable">
+  Customer feedback entries linked to requests
+  
+  **Columns:**
+  - `id` (uuid): Primary key
+  - `requestId` (uuid): Foreign key to requests
+  - `accountId` (text): Salesforce account ID
+  - `opportunityId` (text, optional): Salesforce opportunity ID
+  - `severity` (severityEnum): 'low' | 'medium' | 'high'
+  - `description` (text): Feedback details
+  - `creator` (uuid): Foreign key to users
+  - `createdAt` (timestamp): Creation timestamp
+  - `externalLinks` (text[]): Array of external reference URLs
+  - `slug` (text, optional): Unique identifier within request
+  - `creationSource` (feedbackCreationSourceEnum): 'manual' | 'agent'
+  - `metadata` (jsonb, optional): Additional metadata
+</ResponseField>
+
+<ResponseField name="areas" type="PgTable">
+  Product areas for categorizing requests
+  
+  **Columns:**
+  - `id` (varchar): Primary key (max 36 chars)
+  - `name` (text): Unique area name
+  - `slug` (text): Unique URL-friendly identifier
+  - `description` (text): Area description
+  - `firehoseChannel` (text, optional): Slack channel for notifications
+</ResponseField>
+
+<ResponseField name="sfdcAccounts" type="PgTable">
+  Salesforce account data
+  
+  **Columns:**
+  - `id` (text): Primary key (Salesforce ID)
+  - `name` (text): Account name
+  - `type` (text, optional): Account type
+  - `regionName` (text, optional): Geographic region
+  - `arr` (numeric, optional): Annual recurring revenue
+  - `isEnterprise` (boolean): Enterprise account flag
+  - `website` (text, optional): Company website
+  - `logo` (text, optional): Logo URL
+  - `link` (text, optional): Salesforce record link
+  - `createdAt` (timestamp): Creation timestamp
+  - `updatedAt` (timestamp, optional): Last update timestamp
+</ResponseField>
+
+<ResponseField name="sfdcOpportunities" type="PgTable">
+  Salesforce opportunity data
+  
+  **Columns:**
+  - `id` (text): Primary key (Salesforce ID)
+  - `accountId` (text): Foreign key to sfdcAccounts
+  - `name` (text): Opportunity name
+  - `arr` (numeric, optional): Annual recurring revenue
+  - `stage` (text, optional): Sales stage
+  - `closeDate` (date, optional): Expected close date
+  - `createdAt` (timestamp, optional): Creation timestamp
+  - `updatedAt` (timestamp, optional): Last update timestamp
+</ResponseField>
+
+### Types
+
+```typescript
+import type {
+  User,
+  NewUser,
+  Request,
+  NewRequest,
+  Feedback,
+  NewFeedback,
+  FeedbackWithRequest,
+  FeedbackWithAccount,
+  FeedbackWithRequestAndAccount,
+  FeedbackWithUser,
+  FeedbackWithUserAndAccount,
+  SfdcAccount,
+  SfdcOpportunity,
+  ProductArea,
+  NewProductArea,
+  SeverityGroup,
+  Severity,
+  RequestStatus
+} from '@feedback/db/types'
+```
+
+<ResponseField name="User" type="type">
+  Inferred select type from users table
+</ResponseField>
+
+<ResponseField name="NewUser" type="type">
+  Inferred insert type for creating users
+</ResponseField>
+
+<ResponseField name="Request" type="type">
+  Inferred select type from requests table
+</ResponseField>
+
+<ResponseField name="NewRequest" type="type">
+  Inferred insert type for creating requests
+</ResponseField>
+
+<ResponseField name="Feedback" type="type">
+  Inferred select type from feedback table
+</ResponseField>
+
+<ResponseField name="NewFeedback" type="type">
+  Inferred insert type for creating feedback
+</ResponseField>
+
+<ResponseField name="Severity" type="type">
+  Union type: 'low' | 'medium' | 'high'
+</ResponseField>
+
+<ResponseField name="RequestStatus" type="type">
+  Union type: 'open' | 'shipped' | 'deprioritized'
+</ResponseField>
+
+### Relations
+
+```typescript
+import {
+  usersRelations,
+  requestsRelations,
+  feedbackRelations,
+  areasRelations,
+  sfdcAccountsRelations,
+  sfdcOpportunitiesRelations
+} from '@feedback/db/relations'
+```
+
+Relation definitions for Drizzle's relational queries. These enable type-safe nested queries with `.with()` syntax.
+
+## Database Client Usage
+
+### Basic Queries
+
+<CodeGroup>
+```typescript Select
+import { db, requests, users } from '@feedback/db'
+import { eq, desc } from 'drizzle-orm'
+
+// Select all open requests
+const openRequests = await db
+  .select()
+  .from(requests)
+  .where(eq(requests.status, 'open'))
+  .orderBy(desc(requests.updatedAt))
+
+// Select user by email
+const user = await db
+  .select()
+  .from(users)
+  .where(eq(users.email, 'user@example.com'))
+  .limit(1)
+```
+
+```typescript Insert
+import { db, requests, feedback } from '@feedback/db'
+import type { NewRequest, NewFeedback } from '@feedback/db/types'
+
+// Insert a new request
+const newRequest: NewRequest = {
+  title: 'CSV Export Feature',
+  description: 'Users need ability to export data to CSV',
+  slug: 'csv-export-feature',
+  status: 'open',
+  creator: userId,
+  areaIds: ['analytics', 'export']
+}
+
+const [request] = await db
+  .insert(requests)
+  .values(newRequest)
+  .returning()
+
+// Insert feedback
+const newFeedback: NewFeedback = {
+  requestId: request.id,
+  accountId: 'sfdc_account_123',
+  severity: 'high',
+  description: 'Critical for Q1 2026',
+  creator: userId,
+  creationSource: 'manual'
+}
+
+await db.insert(feedback).values(newFeedback)
+```
+
+```typescript Update
+import { db, requests } from '@feedback/db'
+import { eq } from 'drizzle-orm'
+
+// Update request status
+await db
+  .update(requests)
+  .set({
+    status: 'shipped',
+    updatedAt: new Date().toISOString()
+  })
+  .where(eq(requests.id, requestId))
+
+// Add follower to request
+await db
+  .update(requests)
+  .set({
+    followers: sql`array_append(followers, ${userId})`
+  })
+  .where(eq(requests.id, requestId))
+```
+
+```typescript Delete
+import { db, feedback } from '@feedback/db'
+import { eq } from 'drizzle-orm'
+
+// Delete feedback (cascade deletes are configured)
+await db
+  .delete(feedback)
+  .where(eq(feedback.id, feedbackId))
+```
+</CodeGroup>
+
+### Relational Queries
+
+<CodeGroup>
+```typescript With Relations
+import { db, users, requests, feedback } from '@feedback/db'
+import { eq } from 'drizzle-orm'
+
+// Query request with nested feedback and user data
+const requestWithFeedback = await db.query.requests.findFirst({
+  where: eq(requests.id, requestId),
+  with: {
+    feedback: {
+      with: {
+        creator: true
+      }
+    },
+    creator: true
+  }
+})
+
+// Query user with all their requests
+const userWithRequests = await db.query.users.findFirst({
+  where: eq(users.email, 'user@example.com'),
+  with: {
+    requests: {
+      orderBy: desc(requests.updatedAt),
+      limit: 10
+    }
+  }
+})
+```
+
+```typescript Complex Queries
+import { db, requests, feedback, sfdcAccounts } from '@feedback/db'
+import { eq, desc, and, inArray, sql } from 'drizzle-orm'
+
+// Get requests in specific areas with high-severity feedback
+const urgentRequests = await db
+  .select({
+    request: requests,
+    feedbackCount: sql<number>`count(${feedback.id})`,
+    highSeverityCount: sql<number>`count(case when ${feedback.severity} = 'high' then 1 end)`
+  })
+  .from(requests)
+  .leftJoin(feedback, eq(feedback.requestId, requests.id))
+  .where(
+    and(
+      eq(requests.status, 'open'),
+      sql`${requests.areaIds} && ARRAY['analytics', 'export']::varchar[]`
+    )
+  )
+  .groupBy(requests.id)
+  .having(sql`count(case when ${feedback.severity} = 'high' then 1 end) > 0`)
+  .orderBy(desc(sql`count(${feedback.id})`))
+```
+</CodeGroup>
+
+## Query Patterns
+
+### Filtering by Arrays
+
+```typescript
+import { db, requests } from '@feedback/db'
+import { sql } from 'drizzle-orm'
+
+// Find requests in specific areas
+const analyticsRequests = await db
+  .select()
+  .from(requests)
+  .where(
+    sql`${requests.areaIds} && ARRAY['analytics']::varchar[]`
+  )
+
+// Find requests with specific follower
+const userFollowedRequests = await db
+  .select()
+  .from(requests)
+  .where(
+    sql`${userId} = ANY(${requests.followers})`
+  )
+```
+
+### Aggregations
+
+```typescript
+import { db, feedback, requests } from '@feedback/db'
+import { eq, sql } from 'drizzle-orm'
+
+// Count feedback by severity for a request
+const severityCounts = await db
+  .select({
+    severity: feedback.severity,
+    count: sql<number>`count(*)`
+  })
+  .from(feedback)
+  .where(eq(feedback.requestId, requestId))
+  .groupBy(feedback.severity)
+```
+
+### Joins with Salesforce Data
+
+```typescript
+import { db, feedback, sfdcAccounts, sfdcOpportunities } from '@feedback/db'
+import { eq } from 'drizzle-orm'
+
+// Get feedback with account and opportunity details
+const enrichedFeedback = await db
+  .select({
+    feedback,
+    account: sfdcAccounts,
+    opportunity: sfdcOpportunities
+  })
+  .from(feedback)
+  .innerJoin(sfdcAccounts, eq(feedback.accountId, sfdcAccounts.id))
+  .leftJoin(
+    sfdcOpportunities,
+    eq(feedback.opportunityId, sfdcOpportunities.id)
+  )
+  .where(eq(feedback.requestId, requestId))
+```
+
+## Database Scripts
+
+<ParamField path="db:generate" type="script">
+  Generate migration files from schema changes
+  
+  ```bash
+  npm run db:generate
+  ```
+</ParamField>
+
+<ParamField path="db:migrate" type="script">
+  Run pending migrations
+  
+  ```bash
+  npm run db:migrate
+  ```
+</ParamField>
+
+<ParamField path="db:push" type="script">
+  Push schema changes directly (development only)
+  
+  ```bash
+  npm run db:push
+  ```
+</ParamField>
+
+<ParamField path="db:studio" type="script">
+  Launch Drizzle Studio for database exploration
+  
+  ```bash
+  npm run db:studio
+  ```
+</ParamField>
+
+## Environment Variables
+
+<ParamField path="DATABASE_URL" type="string" required>
+  PostgreSQL connection string
+  
+  ```bash
+  DATABASE_URL="postgresql://user:password@host:5432/database"
+  ```
+</ParamField>

@@ -1,0 +1,460 @@
+---
+title: 'Environment Variables'
+description: 'Complete reference for all GTM Feedback configuration options'
+icon: 'gear'
+---
+
+GTM Feedback uses environment variables to configure database connections, authentication, AI services, and integrations.
+
+## Required Variables
+
+These variables are required for the application to function.
+
+### Database
+
+<ParamField path="DATABASE_URL" type="string" required>
+  PostgreSQL connection string for the application database.
+
+  **Format:** `postgresql://user:password@host:port/database?sslmode=require`
+
+  **Providers:**
+  - [Neon](https://neon.tech) (recommended for Vercel)
+  - [Supabase](https://supabase.com)
+  - [Amazon RDS](https://aws.amazon.com/rds/)
+  - Any PostgreSQL 14+ compatible database
+
+  **Example:**
+  ```bash
+  DATABASE_URL="postgresql://user:pass@ep-cool-name.us-east-2.aws.neon.tech/neondb?sslmode=require"
+  ```
+</ParamField>
+
+### Authentication
+
+<ParamField path="AUTH_GOOGLE_CLIENT_ID" type="string" required>
+  Google OAuth 2.0 Client ID for user authentication.
+
+  **How to get:**
+  1. Go to [Google Cloud Console](https://console.cloud.google.com)
+  2. Create or select a project
+  3. Enable Google+ API
+  4. Create OAuth 2.0 credentials
+  5. Add authorized redirect URI: `https://your-app.vercel.app/api/auth/callback/google`
+
+  **Example:**
+  ```bash
+  AUTH_GOOGLE_CLIENT_ID="123456789-abc123def456.apps.googleusercontent.com"
+  ```
+</ParamField>
+
+<ParamField path="AUTH_GOOGLE_SECRET" type="string" required>
+  Google OAuth 2.0 Client Secret.
+
+  **How to get:** Found in the same credentials page as the Client ID.
+
+  **Example:**
+  ```bash
+  AUTH_GOOGLE_SECRET="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45"
+  ```
+
+  <Warning>
+    Keep this secret secure. Never commit it to version control.
+  </Warning>
+</ParamField>
+
+### AI / OpenAI
+
+<ParamField path="OPENAI_API_KEY" type="string" required>
+  OpenAI API key for AI-powered features including embeddings and semantic search.
+
+  **How to get:**
+  1. Create account at [platform.openai.com](https://platform.openai.com)
+  2. Navigate to API keys
+  3. Create new secret key
+
+  **Example:**
+  ```bash
+  OPENAI_API_KEY="sk-proj-abc123def456ghi789jkl012mno345pqr678"
+  ```
+
+  **Used for:**
+  - Generating embeddings for semantic search
+  - AI-powered feedback categorization
+  - Slack bot AI assistant
+</ParamField>
+
+### Upstash KV (Redis)
+
+<ParamField path="KV_REST_API_URL" type="string" required>
+  Upstash Redis REST API endpoint URL.
+
+  **How to get:**
+  1. Create account at [upstash.com](https://upstash.com)
+  2. Create a new Redis database
+  3. Copy REST API URL from database details
+
+  **Example:**
+  ```bash
+  KV_REST_API_URL="https://gusc1-decent-cat-12345.upstash.io"
+  ```
+</ParamField>
+
+<ParamField path="KV_REST_API_TOKEN" type="string" required>
+  Upstash Redis REST API authentication token.
+
+  **Example:**
+  ```bash
+  KV_REST_API_TOKEN="AaBbCc123456789XxYyZz"
+  ```
+</ParamField>
+
+<ParamField path="KV_REST_API_READ_ONLY_TOKEN" type="string" required>
+  Upstash Redis read-only token for secure read operations.
+
+  **Example:**
+  ```bash
+  KV_REST_API_READ_ONLY_TOKEN="AaBbCc987654321XxYyZz"
+  ```
+</ParamField>
+
+<ParamField path="KV_URL" type="string" required>
+  Upstash Redis connection URL (native protocol).
+
+  **Example:**
+  ```bash
+  KV_URL="redis://default:token@gusc1-decent-cat-12345.upstash.io:6379"
+  ```
+</ParamField>
+
+## Optional Variables
+
+These variables enable additional features but are not required for basic functionality.
+
+### Upstash Vector
+
+<ParamField path="UPSTASH_VECTOR_REST_URL" type="string">
+  Upstash Vector database REST API URL for semantic search.
+
+  **How to get:**
+  1. In Upstash dashboard, create a Vector database
+  2. Copy the REST URL
+
+  **Example:**
+  ```bash
+  UPSTASH_VECTOR_REST_URL="https://vector-abc123.upstash.io"
+  ```
+
+  <Info>
+    If not set, semantic search features will be disabled.
+  </Info>
+</ParamField>
+
+<ParamField path="UPSTASH_VECTOR_REST_TOKEN" type="string">
+  Upstash Vector database authentication token.
+
+  **Example:**
+  ```bash
+  UPSTASH_VECTOR_REST_TOKEN="AbCdEf123456789XyZ"
+  ```
+</ParamField>
+
+### Slack Integration (Web App)
+
+<ParamField path="SLACK_APP_VERIFICATION" type="string">
+  Shared secret between web app and Slack app for request verification.
+
+  **How to generate:**
+  ```bash
+  openssl rand -base64 32
+  ```
+
+  **Example:**
+  ```bash
+  SLACK_APP_VERIFICATION="abc123def456ghi789jkl012mno345pqr678stu901vwx234=="
+  ```
+
+  <Warning>
+    This must match the value set in your Slack app deployment.
+  </Warning>
+</ParamField>
+
+<ParamField path="SLACK_BOT_TOKEN" type="string">
+  Slack Bot User OAuth Token for posting messages and interacting with Slack.
+
+  **How to get:**
+  1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+  2. Select your app → OAuth & Permissions
+  3. Copy the Bot User OAuth Token (starts with `xoxb-`)
+
+  **Example:**
+  ```bash
+  SLACK_BOT_TOKEN="xoxb-123456789012-1234567890123-abcdefghijklmnopqrstuvwx"
+  ```
+</ParamField>
+
+<ParamField path="SLACK_DIGEST_CHANNEL_ID" type="string">
+  Slack channel ID where weekly feedback digests will be posted.
+
+  **How to get:**
+  1. Open Slack in browser
+  2. Navigate to desired channel
+  3. Copy channel ID from URL (starts with `C`)
+
+  **Example:**
+  ```bash
+  SLACK_DIGEST_CHANNEL_ID="C01234ABCDE"
+  ```
+</ParamField>
+
+<ParamField path="SLACK_GTM_FEEDBACK_CHANNEL_ID" type="string">
+  Slack channel ID for real-time feedback notifications.
+
+  **Example:**
+  ```bash
+  SLACK_GTM_FEEDBACK_CHANNEL_ID="C56789FGHIJ"
+  ```
+</ParamField>
+
+### Slack Integration (Slack App)
+
+<ParamField path="SLACK_SIGNING_SECRET" type="string">
+  Slack app signing secret for request verification.
+
+  **How to get:**
+  1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+  2. Select your app → Basic Information → App Credentials
+  3. Copy the Signing Secret
+
+  **Example:**
+  ```bash
+  SLACK_SIGNING_SECRET="abc123def456ghi789jkl012mno345pq"
+  ```
+</ParamField>
+
+<ParamField path="AI_GATEWAY_API_KEY" type="string">
+  API key for AI Gateway (alternative to VERCEL_OIDC_TOKEN).
+
+  **Example:**
+  ```bash
+  AI_GATEWAY_API_KEY="your-gateway-api-key"
+  ```
+</ParamField>
+
+<ParamField path="VERCEL_OIDC_TOKEN" type="string">
+  Vercel OIDC token for secure AI service authentication.
+
+  **Note:** This is automatically provided in Vercel deployments.
+</ParamField>
+
+<ParamField path="NGROK_AUTH_TOKEN" type="string">
+  ngrok authentication token for local development tunneling.
+
+  **How to get:**
+  1. Create account at [ngrok.com](https://ngrok.com)
+  2. Copy auth token from dashboard
+
+  **Example:**
+  ```bash
+  NGROK_AUTH_TOKEN="2abc123def456ghi789jkl012mno345_pqr678stu901vwx234yz"
+  ```
+
+  <Info>
+    Only needed for local Slack app development.
+  </Info>
+</ParamField>
+
+### Cron Jobs
+
+<ParamField path="CRON_SECRET" type="string">
+  Secret key for authenticating cron job requests.
+
+  **How to generate:**
+  ```bash
+  openssl rand -hex 32
+  ```
+
+  **Example:**
+  ```bash
+  CRON_SECRET="abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+  ```
+
+  **Used for:**
+  - Weekly Slack digests
+  - Scheduled data cleanup
+  - Analytics aggregation
+</ParamField>
+
+### Other Configuration
+
+<ParamField path="EXTERNAL_API_VERIFICATION" type="string">
+  Verification token for external API integrations.
+
+  **Example:**
+  ```bash
+  EXTERNAL_API_VERIFICATION="your-external-api-secret"
+  ```
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_APP_URL" type="string">
+  Public URL of your deployed application.
+
+  **Example:**
+  ```bash
+  NEXT_PUBLIC_APP_URL="https://feedback.yourcompany.com"
+  ```
+
+  **Default:** Automatically set by Vercel
+</ParamField>
+
+<ParamField path="SYSTEM_USER_ID" type="string">
+  UUID of the system user for automated actions.
+
+  **Default:**
+  ```bash
+  SYSTEM_USER_ID="00000000-0000-0000-0000-000000000001"
+  ```
+
+  <Info>
+    Only change this if you're using a custom system user ID.
+  </Info>
+</ParamField>
+
+## Configuration by Deployment Type
+
+<Tabs>
+  <Tab title="Web App (Minimal)">
+    Minimum required variables to run the web app:
+
+    ```bash
+    # Database
+    DATABASE_URL="postgresql://..."
+
+    # Authentication
+    AUTH_GOOGLE_CLIENT_ID="..."
+    AUTH_GOOGLE_SECRET="..."
+
+    # AI
+    OPENAI_API_KEY="sk-..."
+
+    # Redis
+    KV_REST_API_URL="https://..."
+    KV_REST_API_TOKEN="..."
+    KV_REST_API_READ_ONLY_TOKEN="..."
+    KV_URL="redis://..."
+    ```
+  </Tab>
+
+  <Tab title="Web App (Full Features)">
+    All variables for complete functionality:
+
+    ```bash
+    # Database
+    DATABASE_URL="postgresql://..."
+
+    # Authentication
+    AUTH_GOOGLE_CLIENT_ID="..."
+    AUTH_GOOGLE_SECRET="..."
+
+    # AI
+    OPENAI_API_KEY="sk-..."
+
+    # Redis
+    KV_REST_API_URL="https://..."
+    KV_REST_API_TOKEN="..."
+    KV_REST_API_READ_ONLY_TOKEN="..."
+    KV_URL="redis://..."
+
+    # Vector Search
+    UPSTASH_VECTOR_REST_URL="https://..."
+    UPSTASH_VECTOR_REST_TOKEN="..."
+
+    # Slack
+    SLACK_APP_VERIFICATION="..."
+    SLACK_BOT_TOKEN="xoxb-..."
+    SLACK_DIGEST_CHANNEL_ID="C..."
+    SLACK_GTM_FEEDBACK_CHANNEL_ID="C..."
+
+    # Cron
+    CRON_SECRET="..."
+    ```
+  </Tab>
+
+  <Tab title="Slack App">
+    Required variables for Slack app:
+
+    ```bash
+    # Slack Credentials
+    SLACK_SIGNING_SECRET="..."
+    SLACK_BOT_TOKEN="xoxb-..."
+    SLACK_APP_VERIFICATION="..."
+
+    # AI (optional but recommended)
+    AI_GATEWAY_API_KEY="..."
+    # OR
+    VERCEL_OIDC_TOKEN="..."
+
+    # Local Development Only
+    NGROK_AUTH_TOKEN="..."
+    ```
+  </Tab>
+</Tabs>
+
+## Security Best Practices
+
+<Warning>
+  **Never commit environment variables to version control.** Use `.env.local` for local development and Vercel's environment variable settings for production.
+</Warning>
+
+<AccordionGroup>
+  <Accordion title="Rotate secrets regularly" icon="rotate">
+    Rotate sensitive credentials (API keys, tokens, secrets) every 90 days or immediately if compromised.
+  </Accordion>
+
+  <Accordion title="Use different values per environment" icon="layer-group">
+    Use separate credentials for development, staging, and production environments.
+  </Accordion>
+
+  <Accordion title="Restrict API key permissions" icon="lock">
+    Configure API keys with minimum required permissions. For example, use read-only tokens where possible.
+  </Accordion>
+
+  <Accordion title="Monitor usage" icon="chart-line">
+    Regularly check API usage dashboards for unexpected activity that might indicate compromised credentials.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Variables not updating after change" icon="triangle-exclamation">
+    After changing environment variables in Vercel:
+    1. Trigger a new deployment (or wait for next git push)
+    2. Variables are only loaded at build time, not runtime
+    3. Check Vercel deployment logs to verify new values are set
+  </Accordion>
+
+  <Accordion title="Local .env not working" icon="triangle-exclamation">
+    - Ensure file is named exactly `.env` or `.env.local`
+    - Restart your development server after changes
+    - Verify file is in the correct directory (app root)
+    - Check for typos in variable names
+  </Accordion>
+
+  <Accordion title="Database connection fails" icon="triangle-exclamation">
+    - Verify connection string format is correct
+    - Check that `?sslmode=require` is included for most providers
+    - Ensure database allows connections from Vercel IPs
+    - Test connection using a PostgreSQL client
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Web App Deployment" icon="globe" href="/deployment/web-app">
+    Deploy the main feedback application
+  </Card>
+  <Card title="Slack App Deployment" icon="slack" href="/deployment/slack-app">
+    Set up the Slack integration
+  </Card>
+</CardGroup>

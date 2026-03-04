@@ -1,0 +1,354 @@
+---
+title: Slack Integration
+description: Build a feedback collection bot with Slack Bolt and AI-powered workflows
+icon: slack
+---
+
+## Overview
+
+GTM Feedback integrates deeply with Slack using the Slack Bolt framework to enable seamless feedback collection directly from customer conversations. The integration supports reaction-based feedback capture, message unfurls, approval workflows, and AI-powered assistance.
+
+## Architecture
+
+The Slack app is built with:
+
+- **Slack Bolt** - Official framework for building Slack apps
+- **Vercel Receiver** - Deploy Slack apps on Vercel
+- **AI SDK** - Power intelligent interactions with language models
+- **Nitro** - Universal JavaScript server framework
+
+## Installation
+
+<Steps>
+  <Step title="Install dependencies">
+    The Slack app is located in `apps/slack-app/`:
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env` file in `apps/slack-app/` with the required credentials:
+
+    ```bash
+    # Slack app credentials
+    SLACK_SIGNING_SECRET=your_signing_secret
+    SLACK_BOT_TOKEN=xoxb-your-bot-token
+
+    # Shared secret with web app
+    SLACK_APP_VERIFICATION=your_shared_secret
+
+    # AI Gateway (optional)
+    AI_GATEWAY_API_KEY=your_gateway_key
+    VERCEL_OIDC_TOKEN=your_oidc_token
+
+    # Local development (optional)
+    NGROK_AUTH_TOKEN=your_ngrok_token
+    ```
+
+    <Tip>
+      Generate a secure verification secret with `openssl rand -base64 32`
+    </Tip>
+  </Step>
+
+  <Step title="Initialize the Bolt app">
+    The app is initialized in `apps/slack-app/server/app.ts`:
+
+    ```typescript apps/slack-app/server/app.ts
+    import { App, LogLevel } from "@slack/bolt";
+    import { VercelReceiver } from "@vercel/slack-bolt";
+    import registerListeners from "./listeners";
+
+    const receiver = new VercelReceiver({
+      logLevel: process.env.NODE_ENV === "development" 
+        ? LogLevel.DEBUG 
+        : LogLevel.INFO,
+    });
+
+    const app = new App({
+      token: process.env.SLACK_BOT_TOKEN,
+      signingSecret: process.env.SLACK_SIGNING_SECRET,
+      receiver,
+      deferInitialization: true,
+    });
+
+    registerListeners(app);
+    ```
+  </Step>
+</Steps>
+
+## Reaction-Based Feedback Capture
+
+Users can add a custom emoji reaction (`:gtm-feedback:`) to any Slack message to capture it as feedback.
+
+### Implementation
+
+The reaction handler is implemented in `apps/slack-app/server/listeners/events/reaction-added.ts`:
+
+```typescript apps/slack-app/server/listeners/events/reaction-added.ts
+const reactionAddedCallback = async ({
+  event,
+  logger,
+  client,
+}: AllMiddlewareArgs & SlackEventMiddlewareArgs<"reaction_added">) => {
+  // Only respond to gtm-feedback emoji
+  if (event.reaction !== "gtm-feedback") {
+    return;
+  }
+
+  const { item, user } = event;
+  const channel = item.channel;
+  const message_ts = item.ts;
+
+  // Determine thread context
+  let thread_ts = null;
+  const messageInfo = await client.conversations.history({
+    channel,
+    latest: message_ts,
+    limit: 1,
+    inclusive: true,
+  });
+
+  if (messageInfo.ok && messageInfo.messages?.[0]?.thread_ts) {
+    thread_ts = messageInfo.messages[0].thread_ts;
+  }
+
+  // Trigger feedback workflow
+  const response = await fetch(`${appUrl}/api/slack/reaction`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      channel,
+      message_ts,
+      thread_ts,
+      user_id: user,
+    }),
+  });
+
+  // Confirm to user
+  await client.chat.postEphemeral({
+    channel,
+    user,
+    thread_ts,
+    text: response.ok 
+      ? "Taking a look..." 
+      : "❌ Failed to process feedback. Please try again.",
+  });
+};
+```
+
+<Note>
+  The reaction handler automatically finds the thread context, even for messages in threads, to maintain conversation continuity.
+</Note>
+
+## Message Unfurls
+
+When GTM Feedback URLs are shared in Slack, they automatically unfurl with rich previews using Slack's Work Objects API.
+
+### Supported Entity Types
+
+- **Feedback** - Individual feedback items
+- **Entries** - Specific feedback entries
+- **Areas** - Product areas
+- **Accounts** - Customer accounts
+
+### Implementation
+
+The unfurl handler is in `apps/slack-app/server/listeners/events/unfurl-callback.ts`:
+
+```typescript apps/slack-app/server/listeners/events/unfurl-callback.ts
+export const unfurlCallback = async ({
+  event,
+  logger,
+  client,
+  body,
+}: AllMiddlewareArgs & SlackEventMiddlewareArgs<"link_shared">) => {
+  const isExternalChannel = body?.is_ext_shared_channel ?? false;
+  const metadata: EntityMetadata[] = [];
+
+  for (const link of event.links) {
+    const parsed = parseGtmFeedbackUrl(link.url);
+    
+    if (!parsed.type) continue;
+
+    // Fetch entity data
+    const response = await fetch(
+      `${appUrl}/api/slack/object?type=${parsed.type}&slug=${parsed.slug}`
+    );
+    const { data } = await response.json();
+
+    // Create appropriate metadata based on entity type
+    if (data.type === "feedback") {
+      metadata.push(
+        createFeedbackEntityMetadata(data, link.url, parsed.slug)
+      );
+    }
+    // ... other entity types
+  }
+
+  // Unfurl with Work Objects metadata
+  await client.chat.unfurl({
+    channel: event.channel,
+    ts: event.message_ts,
+    metadata: { entities: metadata },
+  });
+};
+```
+
+<Warning>
+  In external/shared channels, unfurls show limited information for privacy. Full details are only shown in internal channels.
+</Warning>
+
+## Approval Workflows
+
+The Slack app supports interactive approval workflows where team members can approve or ignore proposed actions.
+
+### Use Cases
+
+- Request creation approval
+- Feedback matching confirmation
+- AI-suggested actions
+
+### Implementation
+
+Approval buttons are handled in `apps/slack-app/server/listeners/actions/request-approval-action.ts`:
+
+```typescript apps/slack-app/server/listeners/actions/request-approval-action.ts
+export const requestApprovalCallback = async ({
+  action,
+  ack,
+  client,
+  body,
+}: AllMiddlewareArgs & SlackActionMiddlewareArgs<BlockButtonAction>) => {
+  await ack();
+
+  // Parse action value: request_approval:channel:ts:action
+  const [, channel, message_ts, actionType] = action.value.split(":");
+  const approved = actionType === "approve";
+
+  // Update message to remove buttons
+  await client.chat.update({
+    channel: body.channel?.id || channel,
+    ts: body.message?.ts || message_ts,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: approved 
+            ? "✅ *Approved* - Creating request..."
+            : "❌ *Ignored*",
+        },
+      },
+    ],
+  });
+
+  // Resume workflow hook
+  await fetch(`${appUrl}/api/workflow-hook/resume`, {
+    method: "POST",
+    body: JSON.stringify({ 
+      token: `request_approval:${channel}:${message_ts}`,
+      approved 
+    }),
+  });
+};
+```
+
+### Creating Approval Buttons
+
+To add approval buttons to your workflow:
+
+```typescript
+await client.chat.postMessage({
+  channel: channelId,
+  thread_ts: threadTs,
+  text: "New Request Proposal",
+  blocks: [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Should we create this request?*\n\n" + description,
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Approve" },
+          style: "primary",
+          value: `request_approval:${channel}:${ts}:approve`,
+          action_id: "request_approval",
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Ignore" },
+          value: `request_approval:${channel}:${ts}:ignore`,
+          action_id: "request_approval",
+        },
+      ],
+    },
+  ],
+});
+```
+
+## Development
+
+### Local Development with Ngrok
+
+```bash
+pnpm dev:tunnel
+```
+
+This command:
+1. Starts an ngrok tunnel
+2. Updates your Slack app manifest with the tunnel URL
+3. Starts the development server
+
+### Running with Slack CLI
+
+```bash
+pnpm dev
+```
+
+This uses the official Slack CLI for local development.
+
+## Deployment
+
+The Slack app is designed to deploy on Vercel:
+
+```bash
+pnpm build
+```
+
+The built app uses Vercel's Slack Bolt receiver for seamless integration with Vercel's serverless platform.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Ephemeral Messages" icon="eye-slash">
+    Use ephemeral messages for confirmations and errors to reduce channel noise
+  </Card>
+  <Card title="Thread Context" icon="comments">
+    Always maintain thread context when responding to reactions or messages
+  </Card>
+  <Card title="Error Handling" icon="shield-check">
+    Gracefully handle API failures and inform users with helpful error messages
+  </Card>
+  <Card title="Rate Limiting" icon="gauge-high">
+    Be mindful of Slack's rate limits, especially when processing bulk operations
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="AI Models" icon="brain" href="/integrations/ai-models">
+    Learn about AI-powered features in the Slack app
+  </Card>
+  <Card title="Authentication" icon="lock" href="/integrations/authentication">
+    Understand user authentication and permissions
+  </Card>
+</CardGroup>

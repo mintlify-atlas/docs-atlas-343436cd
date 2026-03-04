@@ -1,0 +1,328 @@
+---
+title: "Process Feedback Workflow"
+description: "Automatically match customer feedback to feature requests using AI-powered semantic search"
+---
+
+## Overview
+
+The Process Feedback workflow is the core automation that powers intelligent feedback triaging in GTM Feedback. It uses AI agents to automatically match incoming customer feedback to existing feature requests, creating new requests when needed, and managing the human-in-the-loop approval process.
+
+<Info>
+  **Located at**: `apps/www/src/workflows/process-customer-entry/index.ts`
+</Info>
+
+## Purpose
+
+This workflow solves a critical problem in feedback management: automatically determining whether new customer feedback should be added to an existing feature request or if it represents a genuinely new request. By using semantic search and confidence scoring, it reduces manual triaging work while maintaining quality through human oversight.
+
+## Trigger Conditions
+
+The workflow is triggered when:
+
+- A user submits feedback through the **web UI**
+- A Slack message is marked with a feedback reaction emoji
+- An unprocessed feedback entry exists in Redis and needs processing
+
+### Input Parameters
+
+```typescript
+type Args = {
+  customerPain: string;
+  severity: "low" | "medium" | "high";
+  accountId: string;
+  opportunityId: string;
+  links: string[];
+  userId: string;
+  source: "slack" | "ui";
+  submitterName?: string;
+  submittedBy?: string;
+  feedbackId?: string; // Redis ID for cleanup
+};
+```
+
+## Execution Steps
+
+The workflow implements a sophisticated three-tier confidence system:
+
+<Steps>
+  <Step title="Semantic Search">
+    Uses the AI search agent to find similar feature requests based on the customer pain description.
+    
+    ```typescript
+    const searchResult = await searchRequestsStep(customerPain);
+    const topMatch = searchResult.matches[0];
+    ```
+    
+    Returns matches with confidence scores (0-1) and reasoning.
+  </Step>
+
+  <Step title="Confidence Evaluation">
+    Evaluates the top match against three confidence thresholds:
+    
+    - **High confidence (≥0.9)**: Auto-add feedback to existing request
+    - **Medium confidence (0.8-0.9)**: Request human approval
+    - **Low confidence (&lt;0.8)**: Create new feature request
+    
+    <Accordion title="Why these thresholds?">
+      These values are tuned based on semantic similarity scores from OpenAI embeddings. A confidence of 0.9+ indicates very high semantic similarity, while 0.8-0.9 represents "probably related" cases that benefit from human judgment.
+    </Accordion>
+  </Step>
+
+  <Step title="High Confidence Path (≥0.9)">
+    Automatically adds feedback to the matched request:
+    
+    1. Creates feedback entry with metadata (confidence, reason, match type)
+    2. Auto-follows the request for the submitter
+    3. Sends confirmation DM via Slack with AI-generated message
+    
+    ```typescript
+    await createFeedbackForRequest({
+      requestId,
+      userId,
+      severity,
+      accountId,
+      opportunityId,
+      customerPain,
+      links,
+      metadata: {
+        confidence: matchResult.confidence,
+        reason: matchResult.reason,
+        matchType: "existing_request",
+      },
+    });
+    ```
+  </Step>
+
+  <Step title="Medium Confidence Path (0.8-0.9)">
+    Implements human-in-the-loop approval:
+    
+    1. Generates approval message using AI slack agent
+    2. Creates a workflow hook for async response
+    3. Sends Slack DM with "Add to Existing" and "Create New" buttons
+    4. Waits for user decision
+    5. Processes based on approval/decline
+    
+    ```typescript
+    const hook = createHook<{
+      approved: boolean;
+      messageTs?: string;
+      channelId?: string;
+    }>({ token });
+    
+    await sendFeedbackMatchApprovalDm({
+      token,
+      slackUserId,
+      message: approvalMessage,
+    });
+    
+    const approval = await hook; // Pauses workflow until response
+    ```
+    
+    <Note>
+      The workflow uses durable execution, so it can wait for user input without blocking system resources. The state is persisted and resumed when the user responds.
+    </Note>
+  </Step>
+
+  <Step title="Low Confidence Path (&lt;0.8)">
+    Creates a new feature request:
+    
+    1. Fetches all product areas for AI assignment
+    2. Uses request creation agent to generate title, description, and area assignment
+    3. Creates request with auto-generated slug
+    4. Stores vector embedding for future searches
+    5. Creates feedback entry linked to new request
+    
+    ```typescript
+    const productAreas = await getAllProductAreas();
+    const newRequest = await createRequestStep({
+      customerPain,
+      productAreas,
+      metadata: {
+        matchConfidence: matchResult.confidence,
+        matchReason: matchResult.reason,
+        matchType: "new_request",
+      },
+    });
+    ```
+  </Step>
+
+  <Step title="Event Tracking & Cleanup">
+    Finalizes the workflow:
+    
+    1. Tracks analytics event based on source (UI vs Slack)
+    2. Deletes unprocessed feedback from Redis cache
+    3. Sends notification DM to submitter with request URL
+    
+    Returns workflow result:
+    ```typescript
+    return {
+      status: "success",
+      requestId,
+      matched: boolean,
+      confidence: number,
+    };
+    ```
+  </Step>
+</Steps>
+
+## Code Example
+
+Here's how to invoke the workflow:
+
+```typescript
+import { processCustomerFeedback } from "@/workflows/process-customer-entry";
+
+const result = await processCustomerFeedback({
+  customerPain: "Need better API rate limit visibility in dashboard",
+  severity: "high",
+  accountId: "acct_123",
+  opportunityId: "opp_456",
+  links: ["https://slack.com/archives/C123/p789"],
+  userId: "user_abc",
+  source: "slack",
+  submitterName: "Jane Doe",
+  submittedBy: "U123456", // Slack user ID
+  feedbackId: "feedback_xyz", // Optional Redis key
+});
+
+console.log(result);
+// {
+//   status: "success",
+//   requestId: "req_789",
+//   matched: true,
+//   confidence: 0.92
+// }
+```
+
+## Workflow Steps Reference
+
+The workflow uses several reusable steps defined in `/process-customer-entry/steps.ts`:
+
+<AccordionGroup>
+  <Accordion title="searchRequestsStep">
+    **Purpose**: Find semantically similar feature requests
+    
+    **Implementation**: Calls the semantic search AI agent with the customer pain description
+    
+    **Returns**: Array of matches with confidence scores and reasoning
+    
+    ```typescript
+    const result = await agent.search.generate({ 
+      query: customerPain 
+    });
+    return { matches: result.output.matches };
+    ```
+  </Accordion>
+
+  <Accordion title="createRequestStep">
+    **Purpose**: Create a new feature request using AI
+    
+    **Implementation**: 
+    - Uses request creation agent to generate title, description, and area assignment
+    - Creates database record with auto-generated slug
+    - Stores vector embedding for future semantic searches
+    
+    **Location**: `apps/www/src/workflows/process-customer-entry/steps.ts:53`
+  </Accordion>
+
+  <Accordion title="generateSlackMessageStep">
+    **Purpose**: Generate contextual Slack messages using AI
+    
+    **Types**: 
+    - `high_confidence_match`: Confirmation for auto-added feedback
+    - `approval_request`: Human-in-the-loop approval prompt
+    - `dm_notification`: Final notification with request URL
+    
+    **Location**: `apps/www/src/workflows/process-customer-entry/steps.ts:107`
+  </Accordion>
+
+  <Accordion title="sendFeedbackMatchApprovalDm">
+    **Purpose**: Send interactive approval request to Slack
+    
+    **Implementation**: 
+    - Creates Slack message with action buttons
+    - Includes workflow hook token for callback
+    - Returns message timestamp for later updates
+    
+    **Location**: `apps/www/src/workflows/process-customer-entry/steps.ts:131`
+  </Accordion>
+
+  <Accordion title="deleteUnprocessedFeedbackStep">
+    **Purpose**: Clean up temporary feedback from Redis
+    
+    **Implementation**: Deletes Redis key after successful processing
+    
+    **Location**: `apps/www/src/workflows/process-customer-entry/steps.ts:10`
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required for workflow execution
+SYSTEM_USER_ID=user_system      # User ID for system-created requests
+SLACK_BOT_TOKEN=xoxb-...         # Slack bot token for DMs
+
+# AI agents (configured in @feedback/ai)
+OPENAI_API_KEY=sk-...           # For embeddings and agents
+```
+
+### Confidence Thresholds
+
+Adjust these constants in the workflow file:
+
+```typescript
+const AUTO_MATCH_THRESHOLD = 0.9;    // Auto-add threshold
+const APPROVAL_THRESHOLD = 0.8;      // Human approval threshold
+```
+
+<Warning>
+  **Lowering thresholds**: If you decrease `AUTO_MATCH_THRESHOLD`, you risk more false-positive matches. If you decrease `APPROVAL_THRESHOLD`, you'll create more new requests (potentially duplicates).
+</Warning>
+
+## Error Handling
+
+The workflow includes comprehensive error handling:
+
+```typescript
+try {
+  // Workflow execution
+} catch (error) {
+  // Feedback remains in Redis for retry
+  console.error("Failed to process customer feedback:", error);
+  throw error; // Workflow runtime handles retry
+}
+```
+
+Errors during optional steps (like sending DMs) are caught separately:
+
+```typescript
+try {
+  await sendSlackDm({ slackUserId, message });
+} catch (error) {
+  console.error("Failed to send Slack DM:", error);
+  // Don't fail the workflow
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Semantic Search Agent" icon="magnifying-glass" href="/api/agents/semantic-search">
+    Learn how semantic matching works
+  </Card>
+  
+  <Card title="Request Creator Agent" icon="wand-magic-sparkles" href="/api/agents/request-creator">
+    Understand AI-powered request generation
+  </Card>
+  
+  <Card title="Workflows Concept" icon="diagram-project" href="/concepts/workflows">
+    Deep dive into workflow architecture
+  </Card>
+  
+  <Card title="Slack Integration" icon="slack" href="/integrations/slack">
+    Configure Slack feedback collection
+  </Card>
+</CardGroup>

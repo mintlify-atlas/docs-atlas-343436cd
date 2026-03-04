@@ -1,0 +1,250 @@
+---
+title: 'Semantic Search Agent'
+description: 'AI agent for semantic search on customer feedback and feature requests'
+---
+
+## Overview
+
+The Semantic Search Agent performs intelligent semantic search on customer feedback and feature requests. It uses embeddings-based vector search when available, falling back to recent open requests when vector search is unavailable.
+
+**Location**: `packages/ai/src/agents/search/index.ts`
+
+## Purpose
+
+Analyzes search queries and finds matching feature requests by:
+- Creating embeddings for semantic understanding
+- Searching vector database for similar requests
+- Ranking results by relevance and confidence
+- Filtering by product areas when specified
+
+## Agent Configuration
+
+**Model**: Claude Haiku (via `claudeHaiku`)
+
+**Tools**: Optional (uses tools when candidates are not pre-provided)
+
+**Output**: Structured object with matched requests and confidence scores
+
+## System Prompt
+
+The agent operates with the following instructions:
+
+```
+You an AI agent that performs semantic search on customer feedback.
+
+Your job is to find feature requests that match a search query.
+
+Workflow:
+1. If candidates are not provided, use the searchRequests tool to find matching items
+2. Analyze the results and rank by relevance to the query
+3. Return matches with requestId, title, description, confidence, and reason
+
+Confidence scoring:
+- 0.9-1.0: Query describes the exact same feature/issue
+- 0.8-0.89: Strong match, same general feature with minor differences
+- 0.7-0.79: Moderate match, related but not identical
+- 0.5-0.69: Weak match but potentially relevant
+- Below 0.5: Not a match, don't include
+
+Return all matches with confidence >= 0.5, ordered by highest confidence first.
+Be comprehensive but accurate - include potential matches rather than miss relevant ones.
+```
+
+## Available Tools
+
+### searchRequests
+
+Search for request items matching a query using semantic search.
+
+<ParamField path="query" type="string" required>
+  The search query
+</ParamField>
+
+<ParamField path="limit" type="number" default={50}>
+  Max results to return
+</ParamField>
+
+<ParamField path="excludeIds" type="string[]">
+  IDs to exclude from results
+</ParamField>
+
+### createEmbedding
+
+Create an embedding vector for semantic search.
+
+<ParamField path="text" type="string" required>
+  The text to create an embedding for
+</ParamField>
+
+### searchSimilar
+
+Search for similar requests using vector similarity.
+
+<ParamField path="embedding" type="number[]" required>
+  The embedding vector to search with
+</ParamField>
+
+<ParamField path="limit" type="number" default={100}>
+  Max results to return
+</ParamField>
+
+<ParamField path="excludeIds" type="string[]">
+  IDs to exclude from results
+</ParamField>
+
+### getRequestsByIds
+
+Fetch full request details for a list of IDs.
+
+<ParamField path="ids" type="string[]" required>
+  Request IDs to fetch
+</ParamField>
+
+### storeEmbedding
+
+Store an embedding for a request item in the vector database.
+
+<ParamField path="requestId" type="string" required>
+  The request ID
+</ParamField>
+
+<ParamField path="embedding" type="number[]" required>
+  The embedding vector
+</ParamField>
+
+<ParamField path="metadata" type="object" required>
+  Metadata to store with the embedding
+  <ParamField path="title" type="string" required />
+  <ParamField path="description" type="string" required />
+  <ParamField path="areaIds" type="string[]" />
+</ParamField>
+
+## Input
+
+<ParamField path="query" type="string" required>
+  The search query to find matching requests
+</ParamField>
+
+<ParamField path="candidates" type="object[]">
+  Optional pre-filtered list of candidate requests to search within
+  <ParamField path="id" type="string" required />
+  <ParamField path="title" type="string" required />
+  <ParamField path="description" type="string" required />
+  <ParamField path="areaIds" type="string[]" />
+</ParamField>
+
+<ParamField path="context" type="string">
+  Additional context to help understand the query
+</ParamField>
+
+<ParamField path="scope" type="object">
+  Filter scope for the search
+  <ParamField path="areaIds" type="string[]">
+    Filter to these product areas
+  </ParamField>
+</ParamField>
+
+## Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="matches" type="object[]">
+    Matches ordered by highest confidence first
+    <ResponseField name="requestId" type="string">
+      The matching request ID
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      The request title
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      The request description
+    </ResponseField>
+    <ResponseField name="confidence" type="number">
+      Confidence score from 0.0 to 1.0
+    </ResponseField>
+    <ResponseField name="reason" type="string">
+      Brief explanation of why this matches
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="usage" type="object">
+  <ResponseField name="inputTokens" type="number" />
+  <ResponseField name="outputTokens" type="number" />
+</ResponseField>
+
+<ResponseField name="steps" type="number">
+  Number of tool loop iterations
+</ResponseField>
+
+## Usage Example
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.search.generate({
+  query: "Users need to export analytics data",
+  context: "Customer is requesting CSV export functionality",
+  scope: {
+    areaIds: ["analytics-area-id"]
+  }
+});
+
+const matches = result.output.matches.sort((a, b) => b.confidence - a.confidence);
+console.log(`Found ${matches.length} matches`);
+
+for (const match of matches) {
+  console.log(`${match.title} (${match.confidence})`);
+  console.log(`  Reason: ${match.reason}`);
+}
+```
+
+## Real-World Usage
+
+From `apps/www/src/workflows/shared/semantic-search-requests.ts`:
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+export async function semanticSearchRequests(
+  query: string,
+  options?: {
+    context?: string;
+    candidates?: RequestItem[];
+  },
+) {
+  "use step";
+
+  const result = await agent.search.generate({
+    query,
+    candidates: options?.candidates,
+    context: options?.context,
+  });
+
+  return {
+    matches: result.output.matches.sort((a, b) => b.confidence - a.confidence),
+  };
+}
+```
+
+## Context Configuration
+
+Customize the search behavior by providing a `SearchToolContext`:
+
+```typescript
+import { createSearchAgent } from "@feedback/ai/agents";
+
+const searchAgent = createSearchAgent({
+  createEmbedding: async (text: string) => {
+    // Custom embedding logic
+    return await myEmbeddingService.create(text);
+  },
+  searchSimilar: async (embedding, limit, excludeIds) => {
+    // Custom vector search logic
+    return await myVectorDB.search(embedding, limit, excludeIds);
+  },
+  fetchRequestsByIds: async (ids) => {
+    // Custom request fetching logic
+    return await myDB.getRequests(ids);
+  }
+});
+```

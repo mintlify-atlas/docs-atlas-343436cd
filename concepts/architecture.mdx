@@ -1,0 +1,253 @@
+---
+title: System architecture
+description: Learn how GTM Feedback is built with Next.js, Workflow DevKit, and AI SDK
+---
+
+GTM Feedback is a reference architecture for AI-powered feedback collection and triaging. The system uses durable workflows, semantic search, and human-in-the-loop approval to automatically match customer feedback to existing feature requests.
+
+## Architecture overview
+
+The system processes feedback through multiple entry points and uses AI agents to automatically triage and match feedback to feature requests:
+
+<img
+  src="https://github.com/user-attachments/assets/db52c1ba-c009-485d-a355-a23564d04df5"
+  alt="GTM Feedback Architecture Diagram"
+/>
+
+### Key components
+
+**Multiple entry points**
+- Slack reactions on customer messages
+- Form submissions via web UI
+- Direct API integrations
+
+**AI-powered processing**
+- Semantic search with vector embeddings
+- Confidence-based matching (three-tier system)
+- Automated request creation
+- Area insights generation
+
+**Human oversight**
+- Slack approval workflows for medium-confidence matches
+- Manual review for low-confidence feedback
+- Notifications and status updates
+
+**Data persistence**
+- PostgreSQL for core data
+- Upstash Vector for embeddings
+- Redis for workflow state
+
+## Tech stack
+
+GTM Feedback uses modern, production-ready technologies:
+
+### Frontend and framework
+- **Next.js 16** with App Router for server and client rendering
+- **Tailwind CSS v4** with shadcn/ui components for styling
+- **Radix UI** for accessible component primitives
+- **NextAuth v5** with Google OAuth for authentication
+
+### Backend and data
+- **PostgreSQL** (Neon) with Drizzle ORM for relational data
+- **Upstash Vector** for storing and searching embeddings
+- **Redis/Upstash KV** for caching and temporary state
+
+### AI and workflows
+- **Workflow DevKit** for durable execution and background tasks
+- **Vercel AI SDK** with AI Gateway for agent orchestration
+- **OpenAI** text-embedding-3-small for vector embeddings (384 dimensions)
+- **Claude Sonnet** for area insights, **Claude Haiku** for search and matching
+
+### Integrations
+- **Slack Bolt** with Vercel adapter for Slack app
+- **SWR** for client-side data fetching and caching
+
+## Data flow
+
+Here's how feedback moves through the system from submission to storage:
+
+### 1. Feedback submission
+
+Feedback enters the system through one of three paths:
+
+```typescript
+// From Slack reaction (apps/slack-app)
+{ channel, threadTs, severity, accountId }
+
+// From web form (apps/www)
+{ customerPain, severity, accountId, opportunityId }
+
+// From API
+POST /api/feedback
+```
+
+### 2. Workflow orchestration
+
+The `processCustomerFeedback` workflow handles all feedback processing:
+
+```typescript
+// apps/www/src/workflows/process-customer-entry/index.ts
+export async function processCustomerFeedback(args: Args) {
+  "use workflow";
+
+  // Step 1: Search for matching requests
+  const searchResult = await searchRequestsStep(customerPain);
+  
+  // Step 2: Apply confidence thresholds
+  const AUTO_MATCH_THRESHOLD = 0.9;
+  const APPROVAL_THRESHOLD = 0.8;
+  
+  // Step 3: Route based on confidence
+  if (confidence >= AUTO_MATCH_THRESHOLD) {
+    // Auto-add to existing request
+  } else if (confidence >= APPROVAL_THRESHOLD) {
+    // Request human approval via Slack
+  } else {
+    // Create new feature request
+  }
+}
+```
+
+### 3. Vector search
+
+Semantic matching uses OpenAI embeddings stored in Upstash Vector:
+
+```typescript
+// packages/ai/src/embeddings/index.ts
+export async function createRequestEmbedding(
+  title: string,
+  description: string,
+  apiKey: string,
+): Promise<number[] | null> {
+  const text = `${title}\n\n${description}`;
+  const { embedding } = await embed({
+    model: openai.embeddingModel("text-embedding-3-small"),
+    value: text,
+    providerOptions: {
+      openai: {
+        dimensions: 384, // Match Upstash Vector index dimension
+      },
+    },
+  });
+  return embedding;
+}
+```
+
+### 4. Database persistence
+
+All data is stored in PostgreSQL using Drizzle ORM:
+
+```typescript
+// Create feedback entry
+await db.insert(feedback).values({
+  requestId,
+  userId,
+  severity,
+  accountId,
+  opportunityId,
+  customerPain,
+  metadata: { confidence, matchType },
+});
+```
+
+## Apps and packages
+
+The monorepo is organized into apps and shared packages:
+
+### Apps
+
+<CardGroup cols={2}>
+  <Card title="apps/www" icon="globe" href="/deployment/web-app">
+    Next.js web application for feedback collection, request management, and analytics dashboards
+  </Card>
+  <Card title="apps/slack-app" icon="slack" href="/deployment/slack-app">
+    Slack Bolt app for capturing feedback via reactions and slash commands
+  </Card>
+</CardGroup>
+
+### Packages
+
+<CardGroup cols={3}>
+  <Card title="packages/ai" icon="brain">
+    Shared AI agents, tools, and embedding utilities used by both apps
+  </Card>
+  <Card title="packages/database" icon="database">
+    Drizzle ORM schema, relations, and database utilities
+  </Card>
+  <Card title="packages/redis" icon="server">
+    Redis/Upstash KV client helpers for caching and state
+  </Card>
+</CardGroup>
+
+## Project structure
+
+The codebase follows a monorepo pattern with clear separation of concerns:
+
+```
+gtm-feedback/
+├── apps/
+│   ├── www/                    # Next.js web application
+│   │   ├── src/
+│   │   │   ├── app/            # Next.js app router pages
+│   │   │   ├── components/     # React components
+│   │   │   ├── workflows/      # Workflow DevKit workflows
+│   │   │   └── lib/            # Utilities, queries, actions
+│   │   └── scripts/            # Seed and migration scripts
+│   └── slack-app/              # Slack Bolt application
+│       └── server/
+│           ├── api/            # API routes
+│           ├── listeners/      # Slack event/action listeners
+│           └── lib/            # Slack utilities, AI integration
+├── packages/
+│   ├── ai/                     # Shared AI package
+│   │   └── src/
+│   │       ├── agents/         # AI SDK agents
+│   │       ├── tools/          # Agent tools
+│   │       └── embeddings/     # Vector embedding utilities
+│   ├── database/               # Drizzle ORM schema
+│   └── redis/                  # Redis/Upstash helpers
+└── README.md
+```
+
+## Extensibility
+
+The architecture is designed to be adapted to your organization's needs:
+
+<AccordionGroup>
+  <Accordion title="Add new AI agents">
+    Create new `ToolLoopAgent` instances in `packages/ai/src/agents/` following the existing patterns. Each agent should have its own directory with `index.ts`, `prompts.ts`, and `tools.ts`.
+  </Accordion>
+  
+  <Accordion title="Adjust agent behavior">
+    Modify prompts and instructions in agent definition files (e.g., `packages/ai/src/agents/search/prompts.ts`).
+  </Accordion>
+  
+  <Accordion title="Add new tools for agents">
+    Create new tools in `packages/ai/src/tools/` and export them from the appropriate agent's `tools.ts` file.
+  </Accordion>
+  
+  <Accordion title="Create new workflows">
+    Add workflow files to `apps/www/src/workflows/` using the `"use workflow"` directive and Workflow DevKit patterns.
+  </Accordion>
+  
+  <Accordion title="Customize Slack messages">
+    Update message formatting in `apps/slack-app/server/lib/slack/` or adjust the Slack agent's compose mode.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Workflows" icon="diagram-project" href="/concepts/workflows">
+    Learn about durable execution with Workflow DevKit
+  </Card>
+  <Card title="AI agents" icon="robot" href="/concepts/ai-agents">
+    Explore the AI SDK agent architecture
+  </Card>
+  <Card title="Semantic matching" icon="magnifying-glass" href="/concepts/semantic-matching">
+    Understand vector embeddings and confidence scoring
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/deployment/overview">
+    Deploy your own instance
+  </Card>
+</CardGroup>

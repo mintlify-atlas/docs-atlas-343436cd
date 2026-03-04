@@ -1,0 +1,349 @@
+---
+title: Durable workflows
+description: Learn how GTM Feedback uses Workflow DevKit for reliable background task orchestration
+---
+
+GTM Feedback uses [Workflow DevKit](https://useworkflow.dev/) to orchestrate background tasks with durable execution. Workflows handle everything from processing new feedback to generating daily insights reports.
+
+## What is Workflow DevKit?
+
+Workflow DevKit provides durable execution for long-running background tasks. Unlike traditional job queues, workflows can:
+
+- **Survive server restarts** - Workflow state is persisted automatically
+- **Wait for external events** - Pause execution until a user responds via Slack
+- **Run for hours or days** - Sleep for extended periods without holding connections
+- **Retry failed steps** - Individual steps can fail and retry without restarting the entire workflow
+
+### Durable execution example
+
+Here's a workflow that waits 1 hour before checking if a request has feedback:
+
+```typescript
+// apps/www/src/workflows/feedback/new-feedback/index.ts
+export async function newRequestWorkflow(args: Args) {
+  "use workflow";
+
+  // Create request and store embedding
+  await Promise.all([
+    revalidateRequestCache(args),
+    trackEvent({ ...args, type: "new-request" }),
+    findRelatedRequests(args.requestId),
+    storeRequestEmbeddingStep(
+      args.requestId,
+      args.title,
+      args.description,
+      args.areaIds,
+    ),
+  ]);
+
+  // Sleep for 1 hour (workflow state is persisted)
+  await sleep("1h");
+
+  // Check if feedback exists
+  const hasFeedback = await checkFeedbackExist(args.requestId);
+
+  if (!hasFeedback) {
+    // Send DM to creator asking for feedback
+    await sendDmToUser(slackUserId, request.title, request.slug);
+  }
+}
+```
+
+The workflow sleeps for an hour without consuming resources, then resumes exactly where it left off.
+
+## Workflow patterns
+
+GTM Feedback implements several common workflow patterns:
+
+### Human-in-the-loop
+
+Workflows can pause and wait for human input via Slack:
+
+```typescript
+// apps/www/src/workflows/process-customer-entry/index.ts
+export async function processCustomerFeedback(args: Args) {
+  "use workflow";
+
+  const searchResult = await searchRequestsStep(customerPain);
+  const APPROVAL_THRESHOLD = 0.8;
+
+  if (matchResult.confidence >= APPROVAL_THRESHOLD) {
+    // Create a hook that pauses workflow execution
+    const token = `feedback_match_approval:${userId}:${Date.now()}`;
+    const hook = createHook<{
+      approved: boolean;
+      messageTs?: string;
+      channelId?: string;
+    }>({ token });
+
+    // Send approval request to Slack
+    await sendFeedbackMatchApprovalDm({
+      token,
+      slackUserId,
+      message: approvalMessage,
+    });
+
+    // Wait for user to approve or reject (could be seconds or days)
+    const approval = await hook;
+
+    if (approval.approved) {
+      // User approved - add feedback to matched request
+      await createFeedbackForRequest({ requestId, userId, ... });
+    } else {
+      // User declined - create new request
+      const newRequest = await createRequestStep({ customerPain, ... });
+    }
+  }
+}
+```
+
+The workflow pauses at `await hook` and resumes when the user clicks a Slack button.
+
+### Parallel execution
+
+Workflows can execute multiple independent tasks in parallel:
+
+```typescript
+// Execute multiple steps concurrently
+await Promise.all([
+  revalidateRequestCache(args),
+  trackEvent({ ...args, type: "new-request" }),
+  findRelatedRequests(args.requestId),
+  storeRequestEmbeddingStep(
+    args.requestId,
+    args.title,
+    args.description,
+    args.areaIds,
+  ),
+]);
+```
+
+### Scheduled execution
+
+Workflows can be triggered on a schedule for batch processing:
+
+```typescript
+// apps/www/src/workflows/area-insights/index.ts
+export async function generateAllAreaInsightsWorkflow() {
+  "use workflow";
+
+  logger.info("Starting daily insights regeneration...");
+
+  const areas = await getAllProductAreas();
+  const areasWithSlugs = areas.filter(
+    (area): area is typeof area & { slug: string } =>
+      typeof area.slug === "string" && area.slug.length > 0,
+  );
+
+  // Process all areas in parallel
+  const results = await Promise.all(
+    areasWithSlugs.map(async (area) => {
+      try {
+        return await generateAreaInsightsStep({
+          slug: area.slug,
+          userId,
+        });
+      } catch (error) {
+        logger.error(`Failed to process ${area.slug}`, { error });
+        return { success: false, slug: area.slug };
+      }
+    }),
+  );
+
+  return {
+    status: "success",
+    processedCount: results.filter((r) => r.success).length,
+    failedSlugs: results.filter((r) => !r.success).map((r) => r.slug),
+  };
+}
+```
+
+This workflow is triggered daily at 8am ET via cron.
+
+## Available workflows
+
+GTM Feedback includes the following workflows:
+
+### Feedback processing
+
+<Card title="process-customer-entry" icon="inbox">
+  Core workflow that processes new feedback submissions. Performs semantic search, applies confidence thresholds, and routes feedback to existing requests or creates new ones.
+  
+  **Location:** `apps/www/src/workflows/process-customer-entry/index.ts`
+</Card>
+
+<Card title="ingest-slack-feedback" icon="slack">
+  Handles feedback submitted via Slack. Resolves user email, creates user if needed, then delegates to `process-customer-entry`.
+  
+  **Location:** `apps/www/src/workflows/ingest-slack-feedback/index.ts`
+</Card>
+
+<Card title="ingest-slack-feedback-from-reaction" icon="star">
+  Processes feedback captured via Slack emoji reactions. Extracts message thread, summarizes with AI, then processes feedback.
+  
+  **Location:** `apps/www/src/workflows/ingest-slack-feedback-from-reaction/`
+</Card>
+
+### Request management
+
+<Card title="new-feedback/new-request" icon="plus">
+  Handles new feature request creation. Stores embeddings, finds related requests, waits 1 hour, then checks if creator added feedback (if not, sends reminder DM).
+  
+  **Location:** `apps/www/src/workflows/feedback/new-feedback/index.ts`
+</Card>
+
+<Card title="mark-shipped" icon="check">
+  Notifies followers when a request is marked as shipped. Sends Slack messages to all followers and updates request status.
+  
+  **Location:** `apps/www/src/workflows/feedback/mark-shipped/index.ts`
+</Card>
+
+<Card title="find-all-related-feedback" icon="link">
+  Batch workflow that finds related requests using semantic search. Used for cleanup and data quality tasks.
+  
+  **Location:** `apps/www/src/workflows/find-all-related-feedback/index.ts`
+</Card>
+
+### Analytics
+
+<Card title="area-insights" icon="chart-line">
+  Daily cron workflow that regenerates insights reports for all product areas. Runs at 8am ET and processes areas in parallel.
+  
+  **Location:** `apps/www/src/workflows/area-insights/index.ts`
+</Card>
+
+<Card title="weekly-digest" icon="envelope">
+  Generates and sends weekly summary reports (implementation varies by org).
+  
+  **Location:** `apps/www/src/workflows/weekly-digest/`
+</Card>
+
+### Utilities
+
+<Card title="semantic-search" icon="magnifying-glass">
+  Standalone workflow for semantic search queries. Returns matching requests with confidence scores.
+  
+  **Location:** `apps/www/src/workflows/semantic-search/index.ts`
+</Card>
+
+<Card title="sync-embeddings" icon="sync">
+  Batch workflow that syncs request embeddings to Upstash Vector. Used for initial setup or re-indexing.
+  
+  **Location:** `apps/www/src/workflows/sync-embeddings/`
+</Card>
+
+## Workflow steps
+
+Workflows are composed of reusable steps marked with `"use step"`:
+
+```typescript
+// apps/www/src/workflows/process-customer-entry/steps/search-requests.ts
+export async function searchRequestsStep(customerPain: string) {
+  "use step";
+
+  const result = await agent.search.generate({
+    query: customerPain,
+  });
+
+  return result.output;
+}
+```
+
+Steps provide automatic retry and error handling. If a step fails, Workflow DevKit retries it without restarting the entire workflow.
+
+### Step organization
+
+Most workflows organize steps in a `steps/` subdirectory:
+
+```
+workflows/
+├── process-customer-entry/
+│   ├── index.ts              # Main workflow
+│   └── steps/
+│       ├── search-requests.ts
+│       ├── create-request.ts
+│       ├── generate-slack-message.ts
+│       └── send-dm.ts
+```
+
+## Creating workflows
+
+To create a new workflow:
+
+1. **Create workflow file** in `apps/www/src/workflows/your-workflow/index.ts`
+
+2. **Add the workflow directive** at the top of your function:
+
+```typescript
+export async function yourWorkflow(args: Args) {
+  "use workflow";
+  
+  // Workflow logic here
+}
+```
+
+3. **Create steps** in a `steps/` subdirectory:
+
+```typescript
+export async function yourStep(args: StepArgs) {
+  "use step";
+  
+  // Step logic here (database queries, API calls, etc.)
+}
+```
+
+4. **Invoke the workflow** from an API route or server action:
+
+```typescript
+import { getWorkflow } from "workflow";
+import { yourWorkflow } from "@/workflows/your-workflow";
+
+const workflow = getWorkflow(yourWorkflow);
+await workflow.trigger({ ...args });
+```
+
+<Note>
+  See the [Workflow DevKit documentation](https://useworkflow.dev/docs) for advanced patterns like error handling, timeouts, and workflow composition.
+</Note>
+
+## Error handling
+
+Workflows use `FatalError` to distinguish between retryable and permanent failures:
+
+```typescript
+import { FatalError } from "workflow";
+
+export async function yourWorkflow(args: Args) {
+  "use workflow";
+
+  const user = await getUser(args.userId);
+  
+  if (!user) {
+    // Don't retry - user doesn't exist
+    throw new FatalError(`User ${args.userId} not found`);
+  }
+  
+  // This will retry on transient failures
+  await sendEmail(user.email, message);
+}
+```
+
+- **Throw regular errors** for transient failures (network issues, rate limits)
+- **Throw `FatalError`** for permanent failures (missing data, validation errors)
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="AI agents" icon="robot" href="/concepts/ai-agents">
+    Learn about the AI agents used in workflows
+  </Card>
+  <Card title="Semantic matching" icon="magnifying-glass" href="/concepts/semantic-matching">
+    Understand how semantic search works
+  </Card>
+  <Card title="Workflow DevKit docs" icon="book" href="https://useworkflow.dev/docs">
+    Read the official Workflow DevKit documentation
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Review the overall system architecture
+  </Card>
+</CardGroup>

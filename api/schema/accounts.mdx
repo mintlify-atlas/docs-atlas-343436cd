@@ -1,0 +1,194 @@
+---
+title: 'SFDC Accounts table'
+description: 'Database schema reference for the sfdc_accounts table'
+keywords: ['accounts', 'salesforce', 'schema', 'database', 'table', 'drizzle']
+---
+
+## Overview
+
+The `sfdc_accounts` table stores Salesforce account data. It tracks customer account information including ARR, enterprise status, and regional data.
+
+## Fields
+
+<ResponseField name="id" type="text" required>
+  Primary key. Salesforce account ID.
+</ResponseField>
+
+<ResponseField name="name" type="text" required>
+  The account name.
+</ResponseField>
+
+<ResponseField name="type" type="text">
+  Account type classification in Salesforce.
+</ResponseField>
+
+<ResponseField name="regionName" type="text">
+  Geographic region or territory for the account.
+</ResponseField>
+
+<ResponseField name="arr" type="numeric(14,2)">
+  Annual Recurring Revenue for the account. Stored as a number with 2 decimal places.
+</ResponseField>
+
+<ResponseField name="isEnterprise" type="boolean">
+  Whether this is an enterprise-level account. Default: `false`.
+</ResponseField>
+
+<ResponseField name="website" type="text">
+  Account website URL.
+</ResponseField>
+
+<ResponseField name="logo" type="text">
+  URL to the account's logo image.
+</ResponseField>
+
+<ResponseField name="link" type="text">
+  Link to the Salesforce account record.
+</ResponseField>
+
+<ResponseField name="createdAt" type="timestamp" required>
+  Timestamp with timezone when the record was created. Default: `now()`.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="timestamp">
+  Timestamp with timezone when the record was last updated. Default: `now()`.
+</ResponseField>
+
+## Relationships
+
+### Has many
+
+- **Opportunities**: Multiple opportunities can be associated with an account via `sfdc_opportunities.accountId`
+- **Feedback**: Multiple feedback items can reference an account via `feedback.accountId`
+
+## Indexes
+
+<ResponseField name="sfdc_accounts_name_idx" type="index">
+  B-tree index on `name` for efficient account name searches.
+</ResponseField>
+
+<ResponseField name="sfdc_accounts_arr_idx" type="index">
+  B-tree index on `arr` for sorting and filtering accounts by revenue.
+</ResponseField>
+
+<ResponseField name="sfdc_accounts_is_enterprise_idx" type="index">
+  B-tree index on `isEnterprise` for filtering enterprise accounts.
+</ResponseField>
+
+## Example queries
+
+### Query all enterprise accounts
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+import { eq } from 'drizzle-orm';
+
+const enterpriseAccounts = await db.query.sfdcAccounts.findMany({
+  where: eq(sfdcAccounts.isEnterprise, true),
+  orderBy: (sfdcAccounts, { desc }) => [desc(sfdcAccounts.arr)],
+});
+```
+
+### Get account with opportunities and feedback
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+import { eq } from 'drizzle-orm';
+
+const account = await db.query.sfdcAccounts.findFirst({
+  where: eq(sfdcAccounts.id, 'sfdc-account-id'),
+  with: {
+    opportunities: true,
+    feedback: {
+      with: {
+        request: true,
+      },
+    },
+  },
+});
+```
+
+### Find high-ARR accounts
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+import { gte } from 'drizzle-orm';
+
+const highValueAccounts = await db.query.sfdcAccounts.findMany({
+  where: gte(sfdcAccounts.arr, 100000),
+  orderBy: (sfdcAccounts, { desc }) => [desc(sfdcAccounts.arr)],
+});
+```
+
+### Get accounts by region
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+import { eq } from 'drizzle-orm';
+
+const regionalAccounts = await db.query.sfdcAccounts.findMany({
+  where: eq(sfdcAccounts.regionName, 'North America'),
+});
+```
+
+### Search accounts by name
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+import { ilike } from 'drizzle-orm';
+
+const searchResults = await db.query.sfdcAccounts.findMany({
+  where: ilike(sfdcAccounts.name, '%acme%'),
+});
+```
+
+### Create or update account (upsert)
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+
+const account = await db
+  .insert(sfdcAccounts)
+  .values({
+    id: 'sfdc-account-id',
+    name: 'Acme Corporation',
+    type: 'Customer',
+    regionName: 'North America',
+    arr: 250000,
+    isEnterprise: true,
+    website: 'https://acme.com',
+    link: 'https://salesforce.com/account/...',
+  })
+  .onConflictDoUpdate({
+    target: sfdcAccounts.id,
+    set: {
+      name: 'Acme Corporation',
+      arr: 250000,
+      updatedAt: new Date().toISOString(),
+    },
+  })
+  .returning();
+```
+
+### Get account statistics
+
+```typescript
+import { db } from './db';
+import { sfdcAccounts } from './schema';
+import { sql } from 'drizzle-orm';
+
+const stats = await db
+  .select({
+    totalAccounts: sql<number>`count(*)`,
+    totalArr: sql<number>`sum(${sfdcAccounts.arr})`,
+    avgArr: sql<number>`avg(${sfdcAccounts.arr})`,
+    enterpriseCount: sql<number>`count(*) filter (where ${sfdcAccounts.isEnterprise} = true)`,
+  })
+  .from(sfdcAccounts);
+```

@@ -1,0 +1,183 @@
+---
+title: 'Deploy Web App'
+description: 'Deploy the GTM Feedback web application to Vercel'
+icon: 'globe'
+---
+
+## One-Click Deploy
+
+The fastest way to deploy GTM Feedback is using the one-click Vercel deploy button. This will automatically provision all required services:
+
+<Card title="Deploy to Vercel" icon="rocket" href="https://vercel.com/new/clone?repository-url=https://github.com/vercel-labs/oss-gtm-feedback&root-directory=apps/www&project-name=gtm-feedback&repository-name=gtm-feedback&integration-ids=oac_3sK3gnG06emjIEVL09jjntDD&skippable-integrations=1&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-kv%22%2C%22protocol%22%3A%22storage%22%7D%2C%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22upstash%22%2C%22productSlug%22%3A%22upstash-vector%22%2C%22protocol%22%3A%22storage%22%7D%5D">
+  Click to deploy with automatic service provisioning
+</Card>
+
+This deployment will automatically set up:
+- **Neon Postgres** - Database for accounts, opportunities, and feedback
+- **Upstash KV** - Redis cache for session management
+- **Upstash Vector** - Vector database for AI-powered semantic search
+
+## Manual Deployment
+
+If you prefer to configure services manually or use different providers:
+
+<Steps>
+  <Step title="Fork the Repository">
+    Fork the [gtm-feedback repository](https://github.com/vercel-labs/oss-gtm-feedback) to your GitHub account.
+  </Step>
+
+  <Step title="Create a New Vercel Project">
+    1. Go to [vercel.com/new](https://vercel.com/new)
+    2. Import your forked repository
+    3. Set the root directory to `apps/www`
+    4. Click "Deploy" (don't worry about environment variables yet)
+  </Step>
+
+  <Step title="Set Up Required Services">
+    You'll need to provision the following services:
+
+    <AccordionGroup>
+      <Accordion title="PostgreSQL Database" icon="database">
+        Use any PostgreSQL provider (Neon, Supabase, RDS, etc.).
+        
+        For Neon:
+        1. Create account at [neon.tech](https://neon.tech)
+        2. Create a new project
+        3. Copy the connection string
+        4. Set as `DATABASE_URL` environment variable
+      </Accordion>
+
+      <Accordion title="Upstash KV (Redis)" icon="memory">
+        Required for session management and caching.
+        
+        1. Create account at [upstash.com](https://upstash.com)
+        2. Create a new Redis database
+        3. Copy the REST API credentials
+        4. Set `KV_REST_API_URL`, `KV_REST_API_TOKEN`, and `KV_URL`
+      </Accordion>
+
+      <Accordion title="Google OAuth" icon="key">
+        Required for user authentication.
+        
+        1. Go to [Google Cloud Console](https://console.cloud.google.com)
+        2. Create a new project or select existing
+        3. Enable Google+ API
+        4. Create OAuth 2.0 credentials
+        5. Add authorized redirect URI: `https://your-app.vercel.app/api/auth/callback/google`
+        6. Copy Client ID and Client Secret
+        7. Set as `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_SECRET`
+      </Accordion>
+
+      <Accordion title="OpenAI API" icon="brain">
+        Required for AI features and embeddings.
+        
+        1. Create account at [platform.openai.com](https://platform.openai.com)
+        2. Generate an API key
+        3. Set as `OPENAI_API_KEY`
+      </Accordion>
+    </AccordionGroup>
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    In your Vercel project settings, add all required environment variables. See the [Environment Variables](/deployment/environment-variables) page for a complete list.
+  </Step>
+
+  <Step title="Deploy">
+    Trigger a new deployment from Vercel dashboard or push to your main branch.
+  </Step>
+</Steps>
+
+## Post-Deployment Setup
+
+After your first deployment:
+
+<Steps>
+  <Step title="Run Database Migrations">
+    The database schema is automatically created on first connection. However, if you need to manually push the schema:
+
+    ```bash
+    pnpm db:push
+    ```
+  </Step>
+
+  <Step title="Seed Demo Data (Optional)">
+    To populate your database with realistic demo data:
+
+    ```bash
+    pnpm db:seed
+    ```
+
+    This will create:
+    - 5 internal users
+    - 8 product areas for a B2B analytics SaaS
+    - 10 customer accounts with varied ARR
+    - ~30 opportunities
+    - 15 feature requests
+    - ~75 customer feedback entries
+  </Step>
+
+  <Step title="Verify Authentication">
+    1. Navigate to your deployed app
+    2. Click "Sign in with Google"
+    3. Verify you can successfully authenticate
+  </Step>
+
+  <Step title="Test Feedback Creation">
+    Create a test feedback item to ensure all integrations are working correctly.
+  </Step>
+</Steps>
+
+## Vercel Configuration
+
+The project includes optimized Vercel configuration:
+
+<CodeGroup>
+```json vercel.json
+{
+  "framework": "nextjs",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+  The app is configured to run in the `iad1` (US East) region by default. You can change this to a region closer to your users for better performance.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database connection errors" icon="triangle-exclamation">
+    - Verify `DATABASE_URL` is correctly set
+    - Ensure your database allows connections from Vercel's IP addresses
+    - Check that SSL mode is configured correctly (most providers require SSL)
+  </Accordion>
+
+  <Accordion title="Authentication fails" icon="triangle-exclamation">
+    - Verify Google OAuth redirect URI matches your deployment URL exactly
+    - Check that `AUTH_GOOGLE_CLIENT_ID` and `AUTH_GOOGLE_SECRET` are set
+    - Ensure your Google OAuth app is not in testing mode or add test users
+  </Accordion>
+
+  <Accordion title="Build failures" icon="triangle-exclamation">
+    - Check Vercel build logs for specific errors
+    - Ensure all required environment variables are set
+    - Verify your Node.js version matches requirements (18.x or higher)
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Complete reference for all configuration options
+  </Card>
+  <Card title="Slack Integration" icon="slack" href="/deployment/slack-app">
+    Set up the Slack app for feedback collection
+  </Card>
+</CardGroup>

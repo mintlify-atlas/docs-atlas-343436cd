@@ -1,0 +1,322 @@
+---
+title: Product Areas
+description: Organize features into product areas for better insights, ownership, and Slack routing
+icon: grid
+---
+
+Product areas help you organize feature requests into logical categories, enabling area-specific analytics, ownership, and automated routing.
+
+## What Are Product Areas?
+
+Product areas are organizational units that group related feature requests together. Examples might include:
+
+- Authentication & Security
+- Reporting & Analytics  
+- Integrations
+- API & Developer Tools
+- Mobile Experience
+- Admin & Settings
+
+Each area has:
+- A unique name and URL slug
+- A description of its scope
+- An optional Slack firehose channel
+- A dedicated analytics page
+
+## Creating Product Areas
+
+Create new product areas through the management interface:
+
+<Steps>
+  <Step title="Navigate to area management">
+    Go to `/manage/areas` (admin access required).
+  </Step>
+  <Step title="Click Create Area">
+    Open the creation form.
+  </Step>
+  <Step title="Fill in area details">
+    - **Name** (required): Clear, concise area name (max 100 characters)
+    - **Description** (required): What this area covers (max 500 characters)
+    - **Firehose Channel** (optional): Slack channel name for notifications
+  </Step>
+  <Step title="Submit">
+    Create the area - a URL slug will be generated automatically.
+  </Step>
+</Steps>
+
+<Info>
+Area names must be unique. The system generates a URL-friendly slug from the name (e.g., "API & Developer Tools" → `api-developer-tools`).
+</Info>
+
+## Area Configuration
+
+### Basic Settings
+
+<ParamField path="name" type="string" required>
+  The display name for the area. Must be unique across all areas.
+  
+  **Examples:**
+  - "Authentication & Security"
+  - "Reporting & Analytics"
+  - "Mobile Experience"
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  A clear description of what features belong in this area.
+  
+  **Example:**
+  "Features related to user authentication, authorization, SSO, and security controls."
+</ParamField>
+
+<ParamField path="slug" type="string" auto>
+  Auto-generated URL-friendly identifier based on the name.
+  
+  Used in URLs: `/areas/[slug]`
+</ParamField>
+
+### Slack Integration
+
+<ParamField path="firehoseChannel" type="string" optional>
+  Slack channel name (without `#firehose-` prefix) where new feedback should be posted.
+  
+  **Input formats accepted:**
+  - `api` → posts to `#firehose-api`
+  - `firehose-api` → posts to `#firehose-api`
+  - `#firehose-api` → posts to `#firehose-api`
+</ParamField>
+
+<Note>
+The system automatically adds the `#firehose-` prefix to channel names. Just enter the area identifier.
+</Note>
+
+## Assigning Requests to Areas
+
+### During Request Creation
+
+When creating a feature request:
+
+1. **Select one or more areas** (at least one required)
+2. Choose all applicable areas
+3. The primary area determines default routing
+
+### Editing Area Assignments
+
+Change area assignments by editing the request:
+
+1. Navigate to the request page
+2. Click "Edit" (admin/creator only)
+3. Update the selected areas
+4. Save changes
+
+<Warning>
+Changing areas updates:
+- Area-level analytics
+- Slack routing for future feedback
+- Related area insights reports
+</Warning>
+
+### Multiple Area Assignment
+
+Requests can belong to multiple areas when they:
+
+- Span multiple product domains
+- Impact different teams
+- Have cross-functional requirements
+
+<Tip>
+Assign to 1-3 areas typically. More than 3 suggests the request might need to be split.
+</Tip>
+
+## Area Pages
+
+Each area has a dedicated page at `/areas/[slug]` showing:
+
+### Area Header
+
+- **Area name** - Main heading
+- **Description** - Area scope and purpose
+- **Analytics toggle** - Expand/collapse insights
+
+### Analytics Section
+
+AI-generated insights about the area (see [Analytics & Insights](/features/analytics-insights) for details):
+
+- Key themes and patterns
+- Top requests by ARR
+- Recent activity
+- Sentiment analysis
+
+### Request List
+
+All feature requests assigned to this area:
+
+- Sortable by multiple criteria
+- Filterable by status
+- Shows request metrics (feedback count, ARR)
+- Links to full request pages
+
+## Firehose Notifications
+
+When a firehose channel is configured, new feedback automatically posts to that Slack channel.
+
+### Message Format
+
+Firehose messages include:
+
+```
+🔔 New Feedback: [Feature Request Title]
+
+Account: [Customer Name]
+Severity: [High/Medium/Low]
+Opportunity ARR: [$XXX,XXX]
+
+Customer Pain:
+[Description of the customer need]
+
+→ View in GTM Feedback: [Link]
+```
+
+### Routing Logic
+
+- Feedback posts to **all** areas assigned to the request
+- If request has multiple areas, message appears in multiple channels
+- Messages post when feedback is created, not on edits
+
+<Info>
+Firehose channels help product teams stay informed about customer needs in their domain without monitoring all feedback.
+</Info>
+
+## Area Insights
+
+Each area automatically generates AI-powered insights (refreshed weekly):
+
+### What's Analyzed
+
+<CardGroup cols={2}>
+  <Card title="Request Patterns" icon="magnifying-glass">
+    Common themes across feature requests in the area.
+  </Card>
+  <Card title="Customer Signals" icon="users">
+    Which customer segments are most engaged with this area.
+  </Card>
+  <Card title="Priority Indicators" icon="arrow-up">
+    High-ARR or high-severity feedback that needs attention.
+  </Card>
+  <Card title="Trends Over Time" icon="chart-line">
+    Changes in feedback volume and sentiment.
+  </Card>
+</CardGroup>
+
+### Insights Display
+
+On the area page analytics section:
+
+1. **Summary sections** - Key themes with importance ratings
+2. **Visualizations** - Charts and metrics
+3. **Top requests** - Ranked by impact
+4. **Raw data** - Detailed breakdowns
+
+<Note>
+Insights are generated automatically via cron job. You can also manually regenerate them anytime.
+</Note>
+
+## Managing Areas
+
+### Editing Areas
+
+Update area configuration:
+
+1. Navigate to `/manage/areas`
+2. Find the area to edit
+3. Update name, description, or firehose channel
+4. Save changes
+
+<Warning>
+Changing the area name updates the slug. Old URLs will redirect to the new slug.
+</Warning>
+
+### Area Analytics Dashboard
+
+View area-level metrics:
+
+- **Request count** - Total feature requests
+- **Feedback volume** - Total customer feedback items
+- **ARR impact** - Combined ARR across all requests
+- **Status distribution** - Open vs. shipped vs. deprioritized
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Define clear boundaries">
+    Make area scope obvious:
+    - ✅ "Authentication & Security" - Clear what belongs
+    - ✅ "Mobile Apps" - Specific platform
+    - ❌ "Features" - Too broad
+    - ❌ "Misc" - Creates a dumping ground
+  </Accordion>
+  
+  <Accordion title="Set up firehose channels">
+    Create dedicated Slack channels:
+    - Use consistent naming: `#firehose-[area]`
+    - Include relevant product/eng team members
+    - Configure notifications appropriately
+    - Review messages regularly
+  </Accordion>
+  
+  <Accordion title="Align with team structure">
+    Map areas to team ownership:
+    - Each area should have clear owners
+    - Owners monitor area insights
+    - Owners triage area-specific feedback
+    - Consider team capacity when creating areas
+  </Accordion>
+  
+  <Accordion title="Review insights weekly">
+    Make area insights part of planning:
+    - Review during sprint planning
+    - Discuss top requests by ARR
+    - Track trends over time
+    - Share insights with stakeholders
+  </Accordion>
+  
+  <Accordion title="Keep areas manageable">
+    Guidelines for area count:
+    - Start with 5-10 core areas
+    - Add areas as product grows
+    - Merge areas that are too granular
+    - Split areas that become too broad
+  </Accordion>
+</AccordionGroup>
+
+## Area Schema
+
+Areas are stored with this structure:
+
+```typescript
+areas {
+  id: string              // UUID
+  name: string            // Display name (unique)
+  slug: string            // URL slug (unique)
+  description: string     // Area scope
+  firehoseChannel: string // Slack channel (optional)
+}
+```
+
+### Request-Area Relationship
+
+Requests link to areas via array:
+
+```typescript
+requests {
+  id: uuid
+  title: string
+  description: string
+  areaIds: string[]      // Array of area IDs
+  // ... other fields
+}
+```
+
+This enables:
+- Multiple area assignment
+- Fast area-based filtering
+- Efficient analytics queries

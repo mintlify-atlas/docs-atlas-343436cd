@@ -1,0 +1,463 @@
+---
+title: '@feedback/redis'
+description: 'Redis client package with Upstash KV integration for GTM Feedback'
+---
+
+## Overview
+
+The `@feedback/redis` package provides a type-safe Redis client wrapper built on Upstash Redis. It includes error handling, environment configuration, and convenient helper methods for common Redis operations.
+
+## Installation
+
+```bash
+npm install @feedback/redis
+```
+
+## Package Information
+
+<ParamField path="name" type="string">
+  @feedback/redis
+</ParamField>
+
+<ParamField path="version" type="string">
+  0.0.1
+</ParamField>
+
+<ParamField path="dependencies" type="object">
+  - `@upstash/redis`: ^1.35.6
+</ParamField>
+
+## Exports
+
+### Main Export
+
+```typescript
+import { redis, redisClient } from '@feedback/redis'
+```
+
+<ResponseField name="redis" type="object">
+  Safe Redis wrapper with built-in error handling. All methods return success indicators or null/empty values on failure, preventing uncaught errors.
+  
+  **Methods:**
+  - `get<T>(key)`: Get value by key
+  - `set<T>(key, value, options?)`: Set value with optional TTL
+  - `del(key)`: Delete key
+  - `keys(pattern)`: Find keys matching pattern
+</ResponseField>
+
+<ResponseField name="redisClient" type="Redis">
+  Direct Upstash Redis client instance for advanced operations. Use this when you need full Redis API access or want to handle errors manually.
+</ResponseField>
+
+### Re-exports
+
+```typescript
+import { Redis, type SetCommandOptions } from '@feedback/redis'
+```
+
+Re-exports from `@upstash/redis` for type definitions and advanced usage.
+
+## Redis Wrapper Methods
+
+The `redis` wrapper provides error-safe methods with automatic logging:
+
+### Get
+
+```typescript
+redis.get<T>(key: string): Promise<T | null>
+```
+
+<ParamField path="key" type="string" required>
+  Redis key to retrieve
+</ParamField>
+
+<ParamField path="T" type="generic">
+  Type parameter for the expected value type
+</ParamField>
+
+**Returns:** `Promise<T | null>` - The value if found, null if not found or on error
+
+**Example:**
+```typescript
+import { redis } from '@feedback/redis'
+
+const userData = await redis.get<{ name: string }>('user:123')
+if (userData) {
+  console.log('User:', userData.name)
+}
+```
+
+### Set
+
+```typescript
+redis.set<T>(
+  key: string,
+  value: T,
+  options?: SetCommandOptions
+): Promise<boolean>
+```
+
+<ParamField path="key" type="string" required>
+  Redis key to set
+</ParamField>
+
+<ParamField path="value" type="T" required>
+  Value to store (will be JSON serialized)
+</ParamField>
+
+<ParamField path="options" type="SetCommandOptions">
+  Optional Upstash set options (ex: TTL, NX, XX)
+</ParamField>
+
+**Returns:** `Promise<boolean>` - true if successful, false on error
+
+**Example:**
+```typescript
+import { redis } from '@feedback/redis'
+
+// Set with 1 hour TTL
+const success = await redis.set(
+  'session:abc123',
+  { userId: '123', role: 'admin' },
+  { ex: 3600 }
+)
+
+if (success) {
+  console.log('Session stored')
+}
+```
+
+### Delete
+
+```typescript
+redis.del(key: string): Promise<boolean>
+```
+
+<ParamField path="key" type="string" required>
+  Redis key to delete
+</ParamField>
+
+**Returns:** `Promise<boolean>` - true if successful, false on error
+
+**Example:**
+```typescript
+import { redis } from '@feedback/redis'
+
+const deleted = await redis.del('session:abc123')
+if (deleted) {
+  console.log('Session deleted')
+}
+```
+
+### Keys
+
+```typescript
+redis.keys(pattern: string): Promise<string[]>
+```
+
+<ParamField path="pattern" type="string" required>
+  Redis key pattern (supports wildcards: *, ?, [])
+</ParamField>
+
+**Returns:** `Promise<string[]>` - Array of matching keys, empty array on error
+
+**Example:**
+```typescript
+import { redis } from '@feedback/redis'
+
+// Find all session keys
+const sessionKeys = await redis.keys('session:*')
+console.log('Active sessions:', sessionKeys.length)
+
+// Find specific pattern
+const userCacheKeys = await redis.keys('cache:user:*')
+```
+
+## Direct Client Usage
+
+For advanced Redis operations, use `redisClient` directly:
+
+<CodeGroup>
+```typescript Lists
+import { redisClient } from '@feedback/redis'
+
+// Push to list
+await redisClient.lpush('notifications:user:123', {
+  type: 'feedback',
+  requestId: 'req_abc',
+  timestamp: Date.now()
+})
+
+// Get list items
+const notifications = await redisClient.lrange(
+  'notifications:user:123',
+  0,
+  9
+)
+```
+
+```typescript Hashes
+import { redisClient } from '@feedback/redis'
+
+// Set hash fields
+await redisClient.hset('request:req_abc', {
+  title: 'CSV Export',
+  status: 'open',
+  createdAt: Date.now()
+})
+
+// Get all hash fields
+const requestData = await redisClient.hgetall('request:req_abc')
+
+// Get specific field
+const status = await redisClient.hget('request:req_abc', 'status')
+```
+
+```typescript Sets
+import { redisClient } from '@feedback/redis'
+
+// Add to set
+await redisClient.sadd('request:req_abc:followers', 'user_123')
+await redisClient.sadd('request:req_abc:followers', 'user_456')
+
+// Check membership
+const isFollowing = await redisClient.sismember(
+  'request:req_abc:followers',
+  'user_123'
+)
+
+// Get all members
+const followers = await redisClient.smembers(
+  'request:req_abc:followers'
+)
+```
+
+```typescript Sorted Sets
+import { redisClient } from '@feedback/redis'
+
+// Add to sorted set (by timestamp)
+await redisClient.zadd('recent:requests', {
+  score: Date.now(),
+  member: 'req_abc'
+})
+
+// Get top items
+const recent = await redisClient.zrange(
+  'recent:requests',
+  0,
+  9,
+  { rev: true }
+)
+```
+
+```typescript Transactions
+import { redisClient } from '@feedback/redis'
+
+// Pipeline multiple commands
+const pipeline = redisClient.pipeline()
+pipeline.set('key1', 'value1')
+pipeline.set('key2', 'value2')
+pipeline.incr('counter')
+const results = await pipeline.exec()
+
+// Multi/exec transaction
+const multi = redisClient.multi()
+multi.set('key1', 'value1')
+multi.get('key1')
+multi.incr('counter')
+const txResults = await multi.exec()
+```
+</CodeGroup>
+
+## Common Patterns
+
+### Caching
+
+```typescript
+import { redis } from '@feedback/redis'
+
+async function getCachedRequest(requestId: string) {
+  // Try cache first
+  const cached = await redis.get<Request>(`cache:request:${requestId}`)
+  if (cached) {
+    return cached
+  }
+
+  // Fetch from database
+  const request = await db.query.requests.findFirst({
+    where: eq(requests.id, requestId)
+  })
+
+  // Cache for 5 minutes
+  if (request) {
+    await redis.set(
+      `cache:request:${requestId}`,
+      request,
+      { ex: 300 }
+    )
+  }
+
+  return request
+}
+```
+
+### Rate Limiting
+
+```typescript
+import { redisClient } from '@feedback/redis'
+
+async function checkRateLimit(
+  userId: string,
+  limit: number = 100,
+  windowSeconds: number = 60
+): Promise<boolean> {
+  const key = `ratelimit:${userId}:${Math.floor(Date.now() / 1000 / windowSeconds)}`
+  
+  const current = await redisClient.incr(key)
+  
+  if (current === 1) {
+    await redisClient.expire(key, windowSeconds)
+  }
+  
+  return current <= limit
+}
+```
+
+### Session Storage
+
+```typescript
+import { redis } from '@feedback/redis'
+import { randomUUID } from 'crypto'
+
+interface Session {
+  userId: string
+  email: string
+  role: string
+  createdAt: number
+}
+
+async function createSession(userId: string, email: string, role: string) {
+  const sessionId = randomUUID()
+  const session: Session = {
+    userId,
+    email,
+    role,
+    createdAt: Date.now()
+  }
+  
+  // Store with 24 hour TTL
+  await redis.set(
+    `session:${sessionId}`,
+    session,
+    { ex: 86400 }
+  )
+  
+  return sessionId
+}
+
+async function getSession(sessionId: string): Promise<Session | null> {
+  return redis.get<Session>(`session:${sessionId}`)
+}
+
+async function deleteSession(sessionId: string) {
+  return redis.del(`session:${sessionId}`)
+}
+```
+
+### Distributed Locks
+
+```typescript
+import { redisClient } from '@feedback/redis'
+
+async function acquireLock(
+  key: string,
+  ttlSeconds: number = 10
+): Promise<boolean> {
+  const result = await redisClient.set(
+    `lock:${key}`,
+    '1',
+    { ex: ttlSeconds, nx: true }
+  )
+  return result === 'OK'
+}
+
+async function releaseLock(key: string): Promise<void> {
+  await redisClient.del(`lock:${key}`)
+}
+
+// Usage
+async function processRequest(requestId: string) {
+  const lockKey = `process:${requestId}`
+  const acquired = await acquireLock(lockKey, 30)
+  
+  if (!acquired) {
+    console.log('Request already being processed')
+    return
+  }
+  
+  try {
+    // Process request...
+    await doWork(requestId)
+  } finally {
+    await releaseLock(lockKey)
+  }
+}
+```
+
+## Error Handling
+
+The `redis` wrapper automatically handles errors and logs them:
+
+```typescript
+import { redis } from '@feedback/redis'
+
+// All methods return safe fallbacks on error
+const value = await redis.get('key') // null on error
+const success = await redis.set('key', 'value') // false on error
+const deleted = await redis.del('key') // false on error
+const keys = await redis.keys('*') // [] on error
+```
+
+For manual error handling with the direct client:
+
+```typescript
+import { redisClient } from '@feedback/redis'
+
+try {
+  const value = await redisClient.get('key')
+  console.log('Value:', value)
+} catch (error) {
+  console.error('Redis error:', error)
+  // Handle error appropriately
+}
+```
+
+## Environment Variables
+
+<ParamField path="KV_REST_API_URL" type="string" required>
+  Upstash Redis REST API URL
+  
+  ```bash
+  KV_REST_API_URL="https://your-redis.upstash.io"
+  ```
+</ParamField>
+
+<ParamField path="KV_REST_API_TOKEN" type="string" required>
+  Upstash Redis REST API token for authentication
+  
+  ```bash
+  KV_REST_API_TOKEN="your-token-here"
+  ```
+</ParamField>
+
+## Upstash KV Integration
+
+This package is designed for [Upstash Redis](https://upstash.com/), which provides:
+
+- Serverless-friendly HTTP/REST API
+- Global edge caching
+- Per-request pricing
+- No connection pooling needed
+- Automatic TLS encryption
+
+Get your credentials from the [Upstash Console](https://console.upstash.com/).

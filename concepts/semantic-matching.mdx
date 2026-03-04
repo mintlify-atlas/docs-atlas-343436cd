@@ -1,0 +1,507 @@
+---
+title: Semantic matching
+description: Learn how GTM Feedback uses vector embeddings and confidence scoring to match feedback to feature requests
+---
+
+GTM Feedback uses semantic search with vector embeddings to automatically match customer feedback to existing feature requests. This allows the system to understand meaning rather than just matching keywords.
+
+## How semantic matching works
+
+Semantic matching converts text into vector embeddings (numerical representations) and compares them using cosine similarity:
+
+```
+Customer feedback: "Users want CSV export"
+         ↓ OpenAI text-embedding-3-small
+    [0.234, -0.123, 0.456, ...] (384 dimensions)
+         ↓ Vector similarity search
+    Upstash Vector finds similar requests
+         ↓ AI agent refinement
+    Match with confidence score (0.0-1.0)
+```
+
+### Vector embeddings
+
+Embeddings are created using OpenAI's `text-embedding-3-small` model with 384 dimensions:
+
+```typescript
+// packages/ai/src/embeddings/index.ts
+export async function createRequestEmbedding(
+  title: string,
+  description: string,
+  apiKey: string,
+): Promise<number[] | null> {
+  const openai = createOpenAI({ apiKey });
+  const text = `${title}\n\n${description}`;
+  
+  const { embedding } = await embed({
+    model: openai.embeddingModel("text-embedding-3-small"),
+    value: text,
+    providerOptions: {
+      openai: {
+        dimensions: 384, // Match Upstash Vector index dimension
+      },
+    },
+  });
+
+  return embedding;
+}
+```
+
+The title and description are concatenated and converted into a 384-dimensional vector. Similar requests will have vectors that are close together in this high-dimensional space.
+
+### Storing embeddings
+
+Embeddings are stored in Upstash Vector for fast similarity search:
+
+```typescript
+// packages/ai/src/embeddings/index.ts
+export async function storeRequestEmbedding(
+  requestId: string,
+  embedding: number[],
+  url: string,
+  token: string,
+  metadata?: Record<string, unknown>,
+): Promise<boolean> {
+  const index = getVectorIndex(url, token);
+  
+  // Validate embedding dimension
+  if (embedding.length !== 384) {
+    console.error(
+      `Invalid embedding dimension: expected 384, got ${embedding.length}`,
+    );
+    return false;
+  }
+
+  await index.upsert({
+    id: requestId,
+    vector: embedding,
+    metadata: metadata || {},
+  });
+
+  return true;
+}
+```
+
+Each request's embedding is indexed by its ID, allowing fast retrieval by vector similarity.
+
+### Finding similar requests
+
+Vector search finds the most similar requests using cosine similarity:
+
+```typescript
+// packages/ai/src/embeddings/index.ts
+export async function findSimilarRequests(
+  embedding: number[],
+  url: string,
+  token: string,
+  limit: number = 10,
+  excludeIds: string[] = [],
+): Promise<
+  Array<{ id: string; score: number; metadata?: Record<string, unknown> }>
+> {
+  const index = getVectorIndex(url, token);
+
+  const results = await index.query({
+    vector: embedding,
+    topK: limit + excludeIds.length,
+    includeMetadata: true,
+  });
+
+  // Filter out excluded IDs and limit results
+  return results
+    .filter((result) => !excludeIds.includes(String(result.id)))
+    .slice(0, limit)
+    .map((result) => ({
+      id: String(result.id),
+      score: result.score,
+      metadata: result.metadata,
+    }));
+}
+```
+
+The vector database returns similarity scores (0.0-1.0), where 1.0 is an exact match.
+
+## Three-tier confidence system
+
+GTM Feedback uses a three-tier system to balance automation with human oversight:
+
+<CardGroup cols={3}>
+  <Card title="High confidence" icon="check" color="green">
+    **≥0.9** - Auto-add feedback to existing request without approval
+  </Card>
+  <Card title="Medium confidence" icon="user" color="yellow">
+    **0.8-0.9** - Request human approval via Slack before matching
+  </Card>
+  <Card title="Low confidence" icon="plus" color="blue">
+    **&lt;0.8** - Create new feature request automatically
+  </Card>
+</CardGroup>
+
+### Implementation
+
+The confidence thresholds are applied in the core workflow:
+
+```typescript
+// apps/www/src/workflows/process-customer-entry/index.ts
+export async function processCustomerFeedback(args: Args) {
+  "use workflow";
+
+  // Step 1: Use search agent to match customer pain to existing requests
+  const searchResult = await searchRequestsStep(customerPain);
+
+  const AUTO_MATCH_THRESHOLD = 0.9;
+  const APPROVAL_THRESHOLD = 0.8;
+  
+  const topMatch = searchResult.matches[0];
+  const matchResult = topMatch
+    ? {
+        requestId: topMatch.requestId,
+        confidence: topMatch.confidence,
+        reason: topMatch.reason,
+        title: topMatch.title,
+      }
+    : {
+        confidence: 0,
+        requestId: null,
+        title: undefined,
+        reason: undefined,
+      };
+
+  // Step 3: Handle three confidence tiers
+  if (
+    matchResult.requestId &&
+    matchResult.confidence >= AUTO_MATCH_THRESHOLD
+  ) {
+    // Step 3a: Auto-add feedback (high confidence >= 0.9)
+    requestId = matchResult.requestId;
+    await createFeedbackForRequest({
+      requestId,
+      userId,
+      severity,
+      accountId,
+      opportunityId,
+      customerPain,
+      links,
+      metadata: {
+        confidence: matchResult.confidence,
+        reason: matchResult.reason,
+        matchType: "existing_request",
+      },
+    });
+    
+    // Send confirmation DM
+    const message = await generateSlackMessageStep(
+      "high_confidence_match",
+      { requestUrl, requestTitle },
+    );
+    await sendSlackDm({ slackUserId, message });
+  } else if (
+    matchResult.requestId &&
+    matchResult.confidence >= APPROVAL_THRESHOLD
+  ) {
+    // Step 3b: Require approval (medium confidence 0.8-0.9)
+    const token = `feedback_match_approval:${userId}:${Date.now()}`;
+    const hook = createHook({ token });
+
+    // Send approval request to Slack
+    await sendFeedbackMatchApprovalDm({
+      token,
+      slackUserId,
+      message: approvalMessage,
+    });
+
+    // Wait for user response (could be seconds or days)
+    const approval = await hook;
+
+    if (approval.approved) {
+      // User approved - add feedback to matched request
+      await createFeedbackForRequest({ ... });
+    } else {
+      // User declined - create new request
+      const newRequest = await createRequestStep({ ... });
+    }
+  } else {
+    // Step 3c: Create new request (low confidence < 0.8)
+    const productAreas = await getAllProductAreas();
+    const newRequest = await createRequestStep({
+      customerPain,
+      productAreas,
+      metadata: {
+        matchConfidence: matchResult.confidence,
+        matchReason: matchResult.reason,
+        matchType: "new_request",
+      },
+    });
+
+    await createFeedbackForRequest({ ... });
+  }
+}
+```
+
+### Why these thresholds?
+
+The thresholds are based on empirical testing:
+
+- **≥0.9** - Matches at this level are almost always correct. Auto-adding saves time without introducing errors.
+- **0.8-0.9** - Matches are usually correct but benefit from human review. Approval via Slack takes seconds and prevents mistakes.
+- **&lt;0.8** - Matches are uncertain enough that creating a new request is safer than forcing a match.
+
+<Note>
+  You can adjust these thresholds based on your data. More conservative systems might use 0.95/0.85, while more aggressive systems might use 0.85/0.75.
+</Note>
+
+## Matching algorithm
+
+The search agent performs a two-stage matching process:
+
+### Stage 1: Vector similarity search
+
+The search agent's tool performs vector similarity search:
+
+```typescript
+// packages/ai/src/agents/search/tools.ts
+export const searchRequests = tool({
+  description:
+    "Search for request items matching a query. Uses semantic search.",
+  inputSchema: z.object({
+    query: z.string().describe("The search query"),
+    limit: z.number().optional().default(50),
+    excludeIds: z.array(z.string()).optional(),
+  }),
+  execute: async ({ query, limit, excludeIds }, { experimental_context }) => {
+    const ctx = experimental_context as SearchToolContext;
+    
+    // Create embedding for semantic search
+    const embedding = await ctx.createEmbedding(query);
+    
+    if (embedding) {
+      // Perform vector similarity search
+      const searchResults = await ctx.searchSimilar(
+        embedding,
+        limit,
+        excludeIds,
+      );
+      
+      // Fetch full request details
+      const ids = searchResults.map((r) => r.id);
+      const details = await ctx.fetchRequestsByIds(ids);
+      
+      // Merge scores with details
+      return details.map((d) => ({
+        ...d,
+        score: searchResults.find((r) => r.id === d.id)?.score ?? 0,
+      }));
+    }
+    
+    // Fallback to recent open requests
+    return await db.query.requests.findMany({
+      where: (requests, { eq }) => eq(requests.status, "open"),
+      orderBy: (requests, { desc }) => [desc(requests.createdAt)],
+      limit: limit ?? 50,
+    });
+  },
+});
+```
+
+### Stage 2: AI agent refinement
+
+The search agent analyzes vector search results and assigns confidence scores:
+
+```typescript
+// packages/ai/src/agents/search/prompts.ts
+export const SEARCH_INSTRUCTIONS = `
+You are an AI agent that performs semantic search on customer feedback.
+
+Your job is to find feature requests that match a search query.
+
+Workflow:
+1. If candidates are not provided, use the searchRequests tool to find matching items
+2. Analyze the results and rank by relevance to the query
+3. Return matches with requestId, title, description, confidence, and reason
+
+Confidence scoring:
+- 0.9-1.0: Query describes the exact same feature/issue
+- 0.8-0.89: Strong match, same general feature with minor differences
+- 0.7-0.79: Moderate match, related but not identical
+- 0.5-0.69: Weak match but potentially relevant
+- Below 0.5: Not a match, don't include
+
+Return all matches with confidence >= 0.5, ordered by highest confidence first.
+Be comprehensive but accurate - include potential matches rather than miss relevant ones.
+`;
+```
+
+The agent considers:
+- Vector similarity scores from Stage 1
+- Semantic meaning of the query and request
+- Whether the query and request describe the same problem
+- Context and nuance that pure vector similarity might miss
+
+### Example matching flow
+
+```typescript
+Input: "Users want to export their analytics data to CSV"
+
+// Stage 1: Vector search
+Vector search returns:
+[
+  { id: "req_123", title: "CSV Export Feature", score: 0.89 },
+  { id: "req_456", title: "Data Export Options", score: 0.82 },
+  { id: "req_789", title: "Analytics Dashboard", score: 0.65 },
+]
+
+// Stage 2: AI refinement
+Agent analyzes and returns:
+[
+  {
+    requestId: "req_123",
+    title: "CSV Export Feature",
+    confidence: 0.92, // Bumped up - exact match on CSV export
+    reason: "Exact match - both describe CSV export for analytics",
+  },
+  {
+    requestId: "req_456",
+    title: "Data Export Options",
+    confidence: 0.78, // Adjusted down - more general
+    reason: "Related but broader - covers multiple export formats",
+  },
+  // req_789 excluded - not relevant enough
+]
+```
+
+## Batch embedding sync
+
+For initial setup or re-indexing, you can sync all request embeddings in batch:
+
+```typescript
+// packages/ai/src/embeddings/index.ts
+export async function storeRequestEmbeddings(
+  items: Array<{
+    requestId: string;
+    embedding: number[];
+    metadata?: Record<string, unknown>;
+  }>,
+  url: string,
+  token: string,
+): Promise<Set<string>> {
+  const index = getVectorIndex(url, token);
+  const vectors = items.map((item) => ({
+    id: item.requestId,
+    vector: item.embedding,
+    metadata: item.metadata || {},
+  }));
+
+  // Validate vector dimensions
+  const invalidVectors = vectors.filter(
+    (v) => !v.vector || v.vector.length !== 384,
+  );
+  if (invalidVectors.length > 0) {
+    console.error(
+      `Invalid vector dimensions: ${invalidVectors.length} vectors`,
+    );
+    return new Set();
+  }
+
+  // Upsert all vectors in parallel
+  const results = await Promise.allSettled(
+    vectors.map((vector) => index.upsert(vector)),
+  );
+
+  // Track which requestIds succeeded
+  const successfulIds = new Set<string>();
+  results.forEach((result, idx) => {
+    if (result.status === "fulfilled") {
+      successfulIds.add(vectors[idx].id);
+    }
+  });
+
+  return successfulIds;
+}
+```
+
+This is used by the `sync-embeddings` workflow to batch-process requests.
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="When to re-index embeddings">
+    Re-index when:
+    - Initial setup of the system
+    - Switching embedding models or dimensions
+    - Migrating to a new vector database
+    - Bulk updates to request titles/descriptions
+    
+    Normal updates (single request edits) are handled automatically.
+  </Accordion>
+  
+  <Accordion title="Handling multiple matches">
+    The search agent returns multiple matches, but the workflow only uses the top match. You can modify `process-customer-entry` to:
+    - Show top 3 matches for approval
+    - Link related requests automatically
+    - Use lower-ranked matches for "Related requests" suggestions
+  </Accordion>
+  
+  <Accordion title="Adjusting confidence thresholds">
+    Monitor match accuracy and adjust thresholds:
+    - If too many auto-matches are wrong, increase AUTO_MATCH_THRESHOLD to 0.95
+    - If too many new requests are created, lower APPROVAL_THRESHOLD to 0.75
+    - Track approval rates in Slack to find optimal values
+  </Accordion>
+  
+  <Accordion title="Fallback when vector search fails">
+    If Upstash Vector is unavailable, the search tool falls back to recent open requests:
+    ```typescript
+    // Fallback: fetch recent open requests
+    const fallbackResults = await db.query.requests.findMany({
+      where: (requests, { eq }) => eq(requests.status, "open"),
+      orderBy: (requests, { desc }) => [desc(requests.createdAt)],
+      limit,
+    });
+    // Agent will re-rank based on semantic similarity
+    ```
+    The agent still performs semantic analysis, just without vector acceleration.
+  </Accordion>
+</AccordionGroup>
+
+## Performance considerations
+
+**Embedding creation**
+- Text-embedding-3-small: ~0.5ms per embedding
+- Batch embeddings when possible using `embedMany`
+
+**Vector search**
+- Upstash Vector query: ~50ms for top-100 results
+- Scales to millions of vectors
+
+**Overall latency**
+- Full matching pipeline: ~2-3 seconds
+  - 500ms: Create embedding
+  - 50ms: Vector search
+  - 1-2s: AI agent analysis
+
+<Tip>
+  Use the search agent's streaming mode for real-time UX:
+  ```typescript
+  const stream = await agent.search.generate({
+    query: customerPain,
+    stream: true,
+  });
+  ```
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="AI agents" icon="robot" href="/concepts/ai-agents">
+    Learn about the search agent implementation
+  </Card>
+  <Card title="Workflows" icon="diagram-project" href="/concepts/workflows">
+    See how matching is used in workflows
+  </Card>
+  <Card title="Upstash Vector docs" icon="book" href="https://upstash.com/docs/vector">
+    Read the Upstash Vector documentation
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Review the overall system architecture
+  </Card>
+</CardGroup>

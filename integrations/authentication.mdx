@@ -1,0 +1,461 @@
+---
+title: Authentication
+description: Secure your application with NextAuth v5 and Google OAuth
+icon: lock
+---
+
+## Overview
+
+GTM Feedback uses NextAuth v5 (Auth.js) for authentication with Google OAuth provider. User data is stored in PostgreSQL using Drizzle ORM with built-in support for sessions and role-based access control.
+
+## NextAuth v5 Setup
+
+Authentication is configured in `apps/www/src/lib/auth.ts`:
+
+```typescript apps/www/src/lib/auth.ts
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { db } from "@feedback/db";
+import { accounts, sessions, users } from "@feedback/db/schema";
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
+
+export const { auth, handlers, signIn, signOut } = NextAuth({
+  providers: [
+    Google({
+      clientId: process.env.AUTH_GOOGLE_CLIENT_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+    }),
+  ],
+  pages: {
+    signIn: "/login",
+    newUser: "/",
+  },
+  adapter: DrizzleAdapter(db, {
+    usersTable: users,
+    accountsTable: accounts,
+    sessionsTable: sessions,
+  }),
+  callbacks: {
+    authorized: async () => {
+      // Allow public access - anyone can view content
+      return true;
+    },
+    async session({ session, user }) {
+      // Attach user id/avatar/isAdmin to session.user
+      if (session.user) {
+        session.user.id = user.id;
+        session.user.avatar = user.avatar;
+        session.user.isAdmin = true;
+      }
+      return session;
+    },
+  },
+});
+```
+
+## Environment Variables
+
+Add these to your `.env` file:
+
+```bash
+# NextAuth
+AUTH_SECRET=your_nextauth_secret_key
+AUTH_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+AUTH_GOOGLE_SECRET=your_google_client_secret
+
+# Database
+DATABASE_URL=postgresql://user:pass@host/database
+```
+
+<Tip>
+  Generate a secure `AUTH_SECRET` with: `openssl rand -base64 32`
+</Tip>
+
+## Google OAuth Configuration
+
+### Create OAuth Credentials
+
+<Steps>
+  <Step title="Open Google Cloud Console">
+    Navigate to [Google Cloud Console](https://console.cloud.google.com) and create or select a project.
+  </Step>
+
+  <Step title="Enable Google+ API">
+    Go to **APIs & Services > Library** and enable the "Google+ API".
+  </Step>
+
+  <Step title="Create OAuth Client ID">
+    Go to **APIs & Services > Credentials** and click **Create Credentials > OAuth Client ID**.
+
+    Select **Web application** and configure:
+    - **Authorized JavaScript origins**: `http://localhost:3000` (development)
+    - **Authorized redirect URIs**: 
+      - `http://localhost:3000/api/auth/callback/google` (development)
+      - `https://yourdomain.com/api/auth/callback/google` (production)
+  </Step>
+
+  <Step title="Copy credentials">
+    Copy the **Client ID** and **Client Secret** to your `.env` file.
+  </Step>
+</Steps>
+
+### OAuth Consent Screen
+
+Configure the OAuth consent screen:
+
+- **User Type**: Internal (for Google Workspace) or External
+- **Scopes**: `email`, `profile`, `openid` (automatically requested)
+- **Test Users**: Add emails for testing if using External type
+
+## Database Schema
+
+User authentication data is stored in PostgreSQL:
+
+```typescript packages/database/src/schema.ts
+export const users = pgTable("users", {
+  id: uuid().defaultRandom().primaryKey().notNull(),
+  name: text("name").notNull(),
+  email: text("email").unique().notNull(),
+  image: text("image"),
+  avatar: text("avatar"),
+  emailVerified: timestamp("emailVerified", { mode: "date" }),
+  isAdmin: boolean("is_admin").default(false).notNull(),
+});
+
+export const accounts = pgTable("account", {
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").$type<AdapterAccountType>().notNull(),
+  provider: text("provider").notNull(),
+  providerAccountId: text("providerAccountId").notNull(),
+  refresh_token: text("refresh_token"),
+  access_token: text("access_token"),
+  expires_at: integer("expires_at"),
+  token_type: text("token_type"),
+  scope: text("scope"),
+  id_token: text("id_token"),
+  session_state: text("session_state"),
+});
+
+export const sessions = pgTable("session", {
+  sessionToken: text("sessionToken").primaryKey(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: timestamp("expires", { mode: "date" }).notNull(),
+});
+```
+
+<Note>
+  The `isAdmin` field enables role-based access control. By default, it's set to `false`.
+</Note>
+
+## Session Management
+
+### Get Current Session
+
+In Server Components:
+
+```typescript
+import { auth } from "@/lib/auth";
+
+export default async function Page() {
+  const session = await auth();
+  
+  if (!session) {
+    return <div>Please sign in</div>;
+  }
+
+  return (
+    <div>
+      <p>Welcome, {session.user.name}!</p>
+      <p>Email: {session.user.email}</p>
+      {session.user.isAdmin && <p>Admin Access</p>}
+    </div>
+  );
+}
+```
+
+In API Routes:
+
+```typescript apps/www/src/app/(protected)/api/example/route.ts
+import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const session = await auth();
+  
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  return NextResponse.json({
+    user: session.user,
+  });
+}
+```
+
+### Client-Side Session
+
+Use the UserContext provider:
+
+```typescript
+import { useUser } from "@/hooks/use-user";
+
+export function UserProfile() {
+  const { user, loading } = useUser();
+
+  if (loading) return <div>Loading...</div>;
+  if (!user) return <div>Not signed in</div>;
+
+  return (
+    <div>
+      <img src={user.avatar || user.image} alt={user.name} />
+      <p>{user.name}</p>
+      <p>{user.email}</p>
+    </div>
+  );
+}
+```
+
+## User Roles (isAdmin)
+
+The `isAdmin` field provides basic role-based access control:
+
+### Set Admin Status
+
+Manually update in database:
+
+```sql
+UPDATE users 
+SET is_admin = true 
+WHERE email = 'admin@example.com';
+```
+
+Or programmatically:
+
+```typescript
+import { db } from "@feedback/db";
+import { users } from "@feedback/db/schema";
+import { eq } from "drizzle-orm";
+
+await db
+  .update(users)
+  .set({ isAdmin: true })
+  .where(eq(users.email, "admin@example.com"));
+```
+
+### Protect Admin Routes
+
+In Server Actions:
+
+```typescript
+import { adminActionClient } from "@/lib/actions/clients/admin";
+import { z } from "zod";
+
+export const deleteRequest = adminActionClient
+  .metadata({ actionName: "deleteRequest", entity: "request" })
+  .inputSchema(z.object({ id: z.string() }))
+  .action(async ({ parsedInput, ctx: { user } }) => {
+    // Only admins can access this
+    // Middleware automatically checks user.isAdmin
+    
+    await db.delete(requests).where(eq(requests.id, parsedInput.id));
+    return { success: true };
+  });
+```
+
+In Pages:
+
+```typescript
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+export default async function AdminPage() {
+  const session = await auth();
+  
+  if (!session?.user?.isAdmin) {
+    redirect("/");
+  }
+
+  return <div>Admin Dashboard</div>;
+}
+```
+
+## Sign In/Sign Out
+
+### Sign In Button
+
+```typescript
+import { signIn } from "@/lib/auth";
+
+export function SignInButton() {
+  return (
+    <form
+      action={async () => {
+        "use server";
+        await signIn("google");
+      }}
+    >
+      <button type="submit">Sign in with Google</button>
+    </form>
+  );
+}
+```
+
+### Sign Out Button
+
+```typescript
+import { signOut } from "@/lib/auth";
+
+export function SignOutButton() {
+  return (
+    <form
+      action={async () => {
+        "use server";
+        await signOut();
+      }}
+    >
+      <button type="submit">Sign out</button>
+    </form>
+  );
+}
+```
+
+## Custom Pages
+
+NextAuth is configured with custom pages:
+
+```typescript
+pages: {
+  signIn: "/login",      // Custom login page
+  newUser: "/",           // Redirect for new users
+}
+```
+
+Create a custom login page at `app/login/page.tsx`:
+
+```typescript
+import { SignInButton } from "@/components/auth/sign-in-button";
+
+export default function LoginPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="rounded-lg border p-8">
+        <h1 className="mb-4 text-2xl font-bold">Sign In</h1>
+        <p className="mb-4 text-gray-600">
+          Sign in to access GTM Feedback
+        </p>
+        <SignInButton />
+      </div>
+    </div>
+  );
+}
+```
+
+## Event Logging
+
+NextAuth events are logged for debugging:
+
+```typescript
+events: {
+  async signIn({ user, account, isNewUser }) {
+    console.log("[AUTH] Sign in:", {
+      userId: user.id,
+      email: user.email,
+      provider: account?.provider,
+      isNewUser,
+      timestamp: new Date().toISOString(),
+    });
+  },
+},
+logger: {
+  error(code, ...message) {
+    console.error("[AUTH][ERROR]", code, message);
+  },
+},
+```
+
+## TypeScript Types
+
+Extend NextAuth types for custom fields:
+
+```typescript apps/www/src/lib/auth.ts
+import type { User as DbUser } from "@feedback/db/types";
+
+declare module "next-auth" {
+  interface Session {
+    user: DbUser; // Includes id, avatar, isAdmin
+  }
+
+  interface User extends DbUser {}
+}
+```
+
+This enables type-safe access to custom user fields:
+
+```typescript
+const session = await auth();
+session.user.isAdmin; // TypeScript knows this exists
+```
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Secure AUTH_SECRET" icon="key">
+    Use a cryptographically secure random string, never commit to version control
+  </Card>
+  <Card title="HTTPS in Production" icon="shield">
+    Always use HTTPS for OAuth callbacks in production
+  </Card>
+  <Card title="Session Expiration" icon="clock">
+    Configure appropriate session timeouts based on sensitivity
+  </Card>
+  <Card title="Token Storage" icon="database">
+    Tokens are stored securely in database, never in localStorage
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Redirect URI mismatch" icon="triangle-exclamation">
+    Ensure the redirect URI in Google Console exactly matches:
+    ```
+    http://localhost:3000/api/auth/callback/google
+    ```
+    
+    Check for trailing slashes and protocol (http vs https).
+  </Accordion>
+
+  <Accordion title="Session not persisting" icon="rotate">
+    1. Verify `AUTH_SECRET` is set
+    2. Check database connection
+    3. Ensure cookies are enabled
+    4. Verify domain settings in production
+  </Accordion>
+
+  <Accordion title="isAdmin always false" icon="user-lock">
+    The `isAdmin` field defaults to `false`. Manually update in database:
+    ```sql
+    UPDATE users SET is_admin = true WHERE email = 'your@email.com';
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/architecture/database">
+    Learn about user and session tables
+  </Card>
+  <Card title="Server Actions" icon="bolt" href="/development/server-actions">
+    Protect actions with authentication middleware
+  </Card>
+</CardGroup>

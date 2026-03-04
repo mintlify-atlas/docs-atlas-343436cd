@@ -1,0 +1,168 @@
+---
+title: Feedback Collection
+description: Collect customer feedback through multiple entry points and capture detailed context
+icon: inbox
+---
+
+GTM Feedback provides multiple ways to collect customer feedback, ensuring that valuable insights from your customers are captured no matter where they originate.
+
+## Entry Points
+
+### Web UI Form
+
+The primary method for collecting feedback is through the web UI, accessible via the "Add Feedback" button throughout the application.
+
+<Steps>
+  <Step title="Click Add Feedback">
+    Navigate to any page and click the "Add Feedback" button in the interface.
+  </Step>
+  <Step title="Fill in feedback details">
+    Complete the form with:
+    - **Feature Request** (optional): Link to an existing feature request, or leave blank for AI matching
+    - **Account** (required): The customer account this feedback is from
+    - **Opportunity** (optional): Link to a specific sales opportunity
+    - **Severity** (required): Low, Medium, or High impact
+    - **Customer Pain** (required): Description of the customer's problem or need
+    - **Relevant Links** (optional): External links to support tickets, calls, etc.
+  </Step>
+  <Step title="Submit">
+    Submit the form to create the feedback entry.
+  </Step>
+</Steps>
+
+<Note>
+If you don't select a feature request, GTM Feedback will automatically use AI to match your feedback with the most relevant existing feature request.
+</Note>
+
+### Slack Integration
+
+Collect feedback directly from Slack conversations using emoji reactions.
+
+<AccordionGroup>
+  <Accordion title="How it works">
+    React to any Slack message with the configured feedback emoji (e.g., `:gtm-feedback:`) to create a feedback entry. The system will:
+    1. Extract the message content and context
+    2. Identify the customer account from the conversation
+    3. Match or suggest relevant feature requests
+    4. Create the feedback entry automatically
+  </Accordion>
+  
+  <Accordion title="AI-powered matching">
+    When feedback is submitted without a feature request (either via Slack or web UI), the system uses AI to:
+    - Analyze the customer pain description
+    - Compare against existing feature requests
+    - Either match to an existing request or suggest creating a new one
+  </Accordion>
+</AccordionGroup>
+
+## Feedback Metadata
+
+### Required Fields
+
+<CardGroup cols={2}>
+  <Card title="Account" icon="building">
+    The customer account this feedback is associated with. This links to your CRM data and enables ARR calculations.
+  </Card>
+  <Card title="Severity" icon="exclamation-triangle">
+    Impact level of this feedback:
+    - **High**: Critical issue or high-value request
+    - **Medium**: Important but not blocking
+    - **Low**: Nice-to-have enhancement
+  </Card>
+  <Card title="Customer Pain" icon="message">
+    A description of what customer pain this solves and what outcome it enables. Maximum 1000 characters.
+  </Card>
+</CardGroup>
+
+### Optional Fields
+
+<CardGroup cols={2}>
+  <Card title="Feature Request" icon="lightbulb">
+    Link to an existing feature request. Leave blank for automatic AI matching.
+  </Card>
+  <Card title="Opportunity" icon="chart-line">
+    Specific sales opportunity associated with this feedback. Used for deal-specific tracking.
+  </Card>
+  <Card title="External Links" icon="link">
+    Links to support tickets, customer calls, meeting notes, or other relevant resources.
+  </Card>
+</CardGroup>
+
+## Workflows
+
+When feedback is created, GTM Feedback automatically:
+
+1. **Updates cache** - Refresh relevant data for instant UI updates
+2. **Tracks analytics** - Record feedback creation events
+3. **Sends notifications** - Notify relevant team members via Slack
+4. **Syncs to CRM** - Update Salesforce with feedback data (if configured)
+5. **Posts to firehose** - Send to product area-specific Slack channels
+6. **Follows request** - Automatically follow the feature request for updates
+
+<Info>
+All workflows run asynchronously, so feedback submission is instant without waiting for background tasks to complete.
+</Info>
+
+## Viewing Feedback
+
+Feedback can be viewed in multiple contexts:
+
+### By Feature Request
+
+Navigate to a feature request page to see all feedback for that request, grouped by severity level:
+
+- **High Severity** (red) - Critical customer needs
+- **Medium Severity** (amber) - Important requests
+- **Low Severity** (green) - Nice-to-have items
+
+Each feedback entry shows:
+- Customer account name and logo
+- Request status (Open, Shipped, Deprioritized)
+- Customer pain description
+- Creator and creation date
+
+### By Account
+
+View all feedback from a specific customer account at `/accounts/[accountId]`. This shows:
+- Total feedback count by severity
+- Account ARR (Annual Recurring Revenue)
+- Website and company information
+- Expandable lists of feedback items grouped by severity
+
+### By User
+
+See feedback created by a specific team member at `/user/[userId]`.
+
+## Editing and Deletion
+
+<Warning>
+Only admins and the feedback creator can edit or delete feedback entries.
+</Warning>
+
+### Editing Feedback
+
+1. Navigate to the feedback item
+2. Click the edit button
+3. Modify the description, severity, or external links
+4. Submit to save changes
+
+<Note>
+You cannot change the linked account or feature request after creation.
+</Note>
+
+### Deleting Feedback
+
+Feedback can be permanently deleted by the creator or an admin. This action:
+- Removes the feedback from the database
+- Updates ARR calculations
+- Revalidates the feature request page
+- Cannot be undone
+
+## Draft Auto-save
+
+The feedback form automatically saves drafts as you type (for new feedback only, not edits). This prevents data loss if:
+- You accidentally close the modal
+- Your browser crashes
+- You navigate away from the page
+
+Drafts are stored locally in your browser and restored when you reopen the form.

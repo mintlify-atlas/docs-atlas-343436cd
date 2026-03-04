@@ -1,0 +1,488 @@
+---
+title: AI agents
+description: Learn about the AI SDK agent classes that power intelligent feedback matching and insights generation
+---
+
+GTM Feedback uses specialized AI agents built with the [Vercel AI SDK](https://sdk.vercel.ai) to handle different aspects of feedback processing. Each agent is a `ToolLoopAgent` with access to specific tools and instructions.
+
+## Agent architecture
+
+Agents are created using the AI SDK's `ToolLoopAgent` class with three key components:
+
+1. **Model** - The LLM powering the agent (Claude Haiku for speed, Claude Sonnet for quality)
+2. **Tools** - Functions the agent can call to fetch data or perform actions
+3. **Instructions** - System prompt defining the agent's role and behavior
+
+### Basic agent structure
+
+Here's the search agent implementation:
+
+```typescript
+// packages/ai/src/agents/search/index.ts
+import { Output, ToolLoopAgent } from "ai";
+import { claudeHaiku } from "../../models";
+import { searchTools } from "./tools";
+import { SEARCH_INSTRUCTIONS } from "./prompts";
+
+function createInternalSearchAgent(
+  context: SearchToolContext,
+  hasTools: boolean,
+) {
+  return new ToolLoopAgent({
+    model: claudeHaiku,
+    tools: hasTools ? searchTools : undefined,
+    instructions: SEARCH_INSTRUCTIONS,
+    experimental_context: context,
+    output: Output.object({ schema: searchOutputSchema }),
+  });
+}
+```
+
+The agent uses Claude Haiku for fast inference, has access to semantic search tools, and returns structured output matching a Zod schema.
+
+## Available agents
+
+GTM Feedback includes five specialized agents:
+
+### Search agent
+
+<Card title="packages/ai/src/agents/search" icon="magnifying-glass">
+  Performs semantic search on feature requests using vector embeddings.
+  
+  **Model:** Claude Haiku  
+  **Tools:** `searchRequests`, `createEmbedding`, `searchSimilar`, `getRequestsByIds`  
+  **Returns:** Array of matches with confidence scores (0.0-1.0)
+</Card>
+
+**Usage example:**
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.search.generate({
+  query: "Users want to export their data to CSV format",
+});
+
+// result.output.matches = [
+//   {
+//     requestId: "req_123",
+//     title: "CSV Export Feature",
+//     description: "Allow users to export data as CSV",
+//     confidence: 0.92,
+//     reason: "Exact match - both describe CSV export functionality"
+//   },
+//   ...
+// ]
+```
+
+**Confidence scoring:**
+
+```typescript
+// packages/ai/src/agents/search/prompts.ts
+export const SEARCH_INSTRUCTIONS = `
+Confidence scoring:
+- 0.9-1.0: Query describes the exact same feature/issue
+- 0.8-0.89: Strong match, same general feature with minor differences
+- 0.7-0.79: Moderate match, related but not identical
+- 0.5-0.69: Weak match but potentially relevant
+- Below 0.5: Not a match, don't include
+
+Return all matches with confidence >= 0.5, ordered by highest confidence first.
+`;
+```
+
+### Request agent
+
+<Card title="packages/ai/src/agents/requests" icon="file">
+  Creates new feature requests and matches feedback to existing requests.
+  
+  **Model:** Claude Haiku  
+  **Tools:** `getCandidateRequests`, `getProductAreas`, `getRequestById`  
+  **Modes:** match, create, match_or_create, find_related
+</Card>
+
+**Usage example:**
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+// Create a new feature request
+const result = await agent.request.generate({
+  customerPain: "Users can't export their data",
+  mode: "create",
+});
+
+// result.output = {
+//   type: "create",
+//   title: "Data Export Functionality",
+//   description: "Users need the ability to export their data...",
+//   areaIds: ["area_analytics", "area_data"],
+// }
+```
+
+**Match or create example:**
+
+```typescript
+// Try to match, create if no match found
+const result = await agent.request.generate({
+  customerPain: "Need better CSV export options",
+  mode: "match_or_create",
+});
+
+// result.output = {
+//   type: "match_or_create",
+//   decision: "matched", // or "created"
+//   requestId: "req_123",
+//   confidence: 0.85,
+//   reason: "Matches existing CSV export request",
+// }
+```
+
+### Slack agent
+
+<Card title="packages/ai/src/agents/slack" icon="slack">
+  Extracts feedback from Slack messages and generates Slack notifications.
+  
+  **Model:** Claude Haiku  
+  **Tools:** `fetchThreadMessages`, `getUserInfo`  
+  **Modes:** extract, chat, compose
+</Card>
+
+**Usage example:**
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+// Extract feedback from Slack thread
+const result = await agent.slack.generate({
+  mode: "extract",
+  ref: { channel: "C123", threadTs: "1234567890.123456" },
+});
+
+// result.output = {
+//   type: "extraction",
+//   painDescription: "Customer can't export reports in CSV format",
+//   isCustomerSpecific: true,
+//   source: "thread",
+// }
+```
+
+**Compose Slack message:**
+
+```typescript
+// Generate a notification message
+const result = await agent.slack.generate({
+  mode: "compose",
+  composeType: "match_notification",
+  composeContext: {
+    requestUrl: "https://app.example.com/requests/csv-export",
+    requestTitle: "CSV Export Feature",
+    summary: "Added your feedback to the CSV export request",
+  },
+});
+
+// result.output = {
+//   type: "compose",
+//   message: "✅ Added your feedback to CSV Export Feature\n...",
+// }
+```
+
+### Analytics agent
+
+<Card title="packages/ai/src/agents/analytics" icon="chart-line">
+  Generates structured insights reports for product areas.
+  
+  **Model:** Claude Sonnet (higher quality for analysis)  
+  **Tools:** `analyzeDealbreakers`, `analyzeSegments`, `analyzeThemes`, `getExecutionStatus`  
+  **Returns:** Structured report with up to 4 sections
+</Card>
+
+**Usage example:**
+
+```typescript
+import { createAreaInsightsAgent } from "@feedback/ai/agents/area-insights";
+
+// Create agent with pre-fetched context
+const agent = createAreaInsightsAgent({
+  areaId: "area_analytics",
+  slug: "analytics",
+  requests: [...], // Open requests with feedback
+  entries: [...],  // Feedback entries
+  accounts: [...], // Account data
+});
+
+const result = await agent.generate({
+  prompt: "Analyze the analytics product area",
+});
+
+// result.output = {
+//   areaId: "area_analytics",
+//   slug: "analytics",
+//   generatedAt: "2026-03-04T10:30:00Z",
+//   sections: [
+//     {
+//       id: "dealbreakers",
+//       title: "Critical Dealbreakers",
+//       summary: "3 requests blocking $2.5M in ARR",
+//       importance: "critical",
+//       visuals: [
+//         {
+//           kind: "dealbreakers-metric",
+//           props: {
+//             count: 3,
+//             totalArr: 2500000,
+//             topItems: [...],
+//           },
+//         },
+//       ],
+//     },
+//     ...
+//   ],
+// }
+```
+
+**Agent instructions:**
+
+```typescript
+// packages/ai/src/agents/area-insights.ts
+const AREA_INSIGHTS_INSTRUCTIONS = `
+You are a product analytics strategist analyzing OPEN feature requests.
+
+Your job is to produce a concise AreaInsightsReport with up to 4 sections:
+
+1. "dealbreakers" - Critical issues blocking revenue
+2. "segments" - Which customer segments feel the most pain
+3. "themes" - Recurring patterns of confusion or friction
+4. "execution" - How well this area is executing
+
+Guidelines:
+- Be opinionated: highlight what matters most
+- Keep summaries to 1-2 sentences max, no fluff
+- Set importance to "critical" only for dealbreakers with >$500k ARR
+- If a section has no meaningful data, skip it entirely
+- Order sections by importance (critical first)
+`;
+```
+
+### Identity agent
+
+<Card title="packages/ai/src/agents/identity" icon="user">
+  Resolves user identities from email addresses.
+  
+  **Model:** Claude Haiku  
+  **Tools:** `searchUsersByEmail`, `getUserById`  
+  **Returns:** userId with confidence score
+</Card>
+
+**Usage example:**
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.identity.generate({
+  email: "alice@example.com",
+});
+
+// result.output = {
+//   userId: "user_123",
+//   confidence: 0.95,
+//   reason: "Exact email match",
+// }
+```
+
+## Agent tools
+
+Agents use tools to interact with data sources. Tools are defined using the AI SDK's `tool` function:
+
+```typescript
+// packages/ai/src/agents/search/tools.ts
+import { tool } from "ai";
+import { z } from "zod";
+
+export const searchRequests = tool({
+  description:
+    "Search for request items matching a query. Uses semantic search if available.",
+  inputSchema: z.object({
+    query: z.string().describe("The search query"),
+    limit: z.number().optional().default(50).describe("Max results to return"),
+    excludeIds: z
+      .array(z.string())
+      .optional()
+      .describe("IDs to exclude from results"),
+  }),
+  execute: async ({ query, limit, excludeIds }, { experimental_context }) => {
+    const ctx = experimental_context as SearchToolContext;
+    
+    // Create embedding for semantic search
+    const embedding = await ctx.createEmbedding(query);
+    
+    if (embedding) {
+      // Perform vector similarity search
+      const searchResults = await ctx.searchSimilar(embedding, limit, excludeIds);
+      
+      // Fetch full request details
+      const ids = searchResults.map((r) => r.id);
+      const details = await ctx.fetchRequestsByIds(ids);
+      
+      return details.map((d) => ({
+        ...d,
+        score: searchResults.find((r) => r.id === d.id)?.score ?? 0,
+      }));
+    }
+    
+    // Fallback to recent open requests
+    return await db.query.requests.findMany({
+      where: (requests, { eq }) => eq(requests.status, "open"),
+      orderBy: (requests, { desc }) => [desc(requests.createdAt)],
+      limit: limit ?? 50,
+    });
+  },
+});
+```
+
+### Tool context
+
+Tools receive context via `experimental_context`, allowing you to inject dependencies:
+
+```typescript
+import { createAgent } from "@feedback/ai/agents";
+
+const customAgent = createAgent({
+  search: {
+    createEmbedding: async (text) => {
+      // Custom embedding logic
+      return myEmbeddingService.embed(text);
+    },
+    searchSimilar: async (embedding, limit) => {
+      // Custom vector search
+      return myVectorDB.search(embedding, limit);
+    },
+  },
+});
+```
+
+## Agent output
+
+Agents return structured output using Zod schemas:
+
+```typescript
+import { Output } from "ai";
+import { z } from "zod";
+
+const searchOutputSchema = z.object({
+  matches: z
+    .array(
+      z.object({
+        requestId: z.string(),
+        title: z.string(),
+        description: z.string(),
+        confidence: z.number().min(0).max(1),
+        reason: z.string().optional(),
+      }),
+    )
+    .describe("Matches ordered by highest confidence first"),
+});
+
+const agent = new ToolLoopAgent({
+  model: claudeHaiku,
+  tools: searchTools,
+  instructions: SEARCH_INSTRUCTIONS,
+  output: Output.object({ schema: searchOutputSchema }),
+});
+```
+
+The agent's output is validated against the schema, ensuring type safety.
+
+## Creating custom agents
+
+To create a new agent:
+
+1. **Create agent directory** in `packages/ai/src/agents/your-agent/`
+
+2. **Define tools** in `tools.ts`:
+
+```typescript
+import { tool } from "ai";
+import { z } from "zod";
+
+export const yourTool = tool({
+  description: "What this tool does",
+  inputSchema: z.object({
+    param: z.string(),
+  }),
+  execute: async ({ param }, { experimental_context }) => {
+    // Tool logic here
+  },
+});
+
+export const yourTools = { yourTool };
+```
+
+3. **Write instructions** in `prompts.ts`:
+
+```typescript
+export const YOUR_AGENT_INSTRUCTIONS = `
+You are an AI agent that...
+
+Your job is to...
+
+Guidelines:
+- Be specific
+- Use tools to fetch data
+- Return structured output
+`;
+```
+
+4. **Create agent** in `index.ts`:
+
+```typescript
+import { ToolLoopAgent, Output } from "ai";
+import { z } from "zod";
+import { claudeHaiku } from "../../models";
+import { yourTools } from "./tools";
+import { YOUR_AGENT_INSTRUCTIONS } from "./prompts";
+
+const outputSchema = z.object({
+  result: z.string(),
+});
+
+export function createYourAgent() {
+  return new ToolLoopAgent({
+    model: claudeHaiku,
+    tools: yourTools,
+    instructions: YOUR_AGENT_INSTRUCTIONS,
+    output: Output.object({ schema: outputSchema }),
+  });
+}
+```
+
+5. **Export from main agent file**:
+
+```typescript
+// packages/ai/src/agents/index.ts
+import { createYourAgent } from "./your-agent";
+
+export function createAgent(overrides = {}) {
+  return {
+    // ... existing agents
+    yourAgent: createYourAgent(),
+  };
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Semantic matching" icon="magnifying-glass" href="/concepts/semantic-matching">
+    Learn how semantic search and embeddings work
+  </Card>
+  <Card title="Workflows" icon="diagram-project" href="/concepts/workflows">
+    See how agents are used in workflows
+  </Card>
+  <Card title="AI SDK docs" icon="book" href="https://sdk.vercel.ai/docs">
+    Read the Vercel AI SDK documentation
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Review the overall system architecture
+  </Card>
+</CardGroup>

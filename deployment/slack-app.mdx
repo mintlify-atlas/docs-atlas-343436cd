@@ -1,0 +1,267 @@
+---
+title: 'Deploy Slack App'
+description: 'Set up the GTM Feedback Slack integration for reaction-based feedback capture'
+icon: 'slack'
+---
+
+The GTM Feedback Slack app enables your team to capture customer feedback directly from Slack conversations using reactions, commands, and an AI assistant.
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Reaction Capture" icon="face-smile">
+    React to messages with `:gtm-feedback:` to save them as feedback
+  </Card>
+  <Card title="AI Assistant" icon="robot">
+    Chat with the feedback bot to query and manage feedback
+  </Card>
+  <Card title="Slash Commands" icon="terminal">
+    Quick commands for creating and searching feedback
+  </Card>
+  <Card title="Weekly Digests" icon="calendar">
+    Automated summaries of feedback trends
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<Warning>
+  You must deploy the [web app](/deployment/web-app) first before setting up the Slack integration.
+</Warning>
+
+## Deployment Steps
+
+<Steps>
+  <Step title="Create Slack App">
+    1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+    2. Click **Create New App** → **From a manifest**
+    3. Select your workspace
+    4. Copy the contents of `manifest.json` from the repository
+    5. Paste into the manifest editor and create the app
+
+    <Accordion title="View manifest.json location">
+      The manifest file is located at `apps/slack-app/manifest.json` in the repository.
+    </Accordion>
+  </Step>
+
+  <Step title="Gather Slack Credentials">
+    After creating your app, collect these credentials:
+
+    <AccordionGroup>
+      <Accordion title="Signing Secret" icon="key">
+        1. Navigate to **Basic Information** → **App Credentials**
+        2. Copy the **Signing Secret**
+        3. Save as `SLACK_SIGNING_SECRET`
+      </Accordion>
+
+      <Accordion title="Bot Token" icon="robot">
+        1. Navigate to **OAuth & Permissions**
+        2. Click **Install to Workspace** if not already installed
+        3. Copy the **Bot User OAuth Token** (starts with `xoxb-`)
+        4. Save as `SLACK_BOT_TOKEN`
+      </Accordion>
+
+      <Accordion title="App Verification Secret" icon="shield">
+        Generate a random secure string to share between Slack app and web app:
+
+        ```bash
+        openssl rand -base64 32
+        ```
+
+        Save this as `SLACK_APP_VERIFICATION` in both apps.
+      </Accordion>
+    </AccordionGroup>
+  </Step>
+
+  <Step title="Deploy to Vercel">
+    Click the deploy button below and enter your Slack credentials:
+
+    <Card title="Deploy Slack App" icon="rocket" href="https://vercel.com/new/clone?repository-url=https://github.com/vercel-labs/oss-gtm-feedback&root-directory=apps/slack-app&project-name=gtm-feedback-slack-app&repository-name=gtm-feedback-slack-app&env=SLACK_SIGNING_SECRET,SLACK_BOT_TOKEN,SLACK_APP_VERIFICATION&envDescription=Retrieve%20your%20Slack%20app%20credentials%20from%20api.slack.com%2Fapps&envLink=https://api.slack.com/apps">
+      One-click deploy to Vercel
+    </Card>
+
+    Or deploy manually:
+    1. Fork the repository
+    2. Create new Vercel project
+    3. Set root directory to `apps/slack-app`
+    4. Add environment variables (see [Environment Variables](/deployment/environment-variables))
+    5. Deploy
+  </Step>
+
+  <Step title="Update Slack App URLs">
+    After deployment, configure your Slack app to use your Vercel URL:
+
+    1. Go to [api.slack.com/apps](https://api.slack.com/apps) and select your app
+    2. Navigate to **Event Subscriptions**:
+       - Enable Events
+       - Set Request URL to: `https://your-slack-app.vercel.app/api/slack/events`
+       - Wait for verification (should show "Verified")
+    3. Navigate to **Interactivity & Shortcuts**:
+       - Enable Interactivity
+       - Set Request URL to: `https://your-slack-app.vercel.app/api/slack/events`
+    4. Save changes
+
+    <Warning>
+      The Request URLs must be verified (show a green checkmark) for the app to work correctly.
+    </Warning>
+  </Step>
+
+  <Step title="Add Custom Emoji">
+    Add the `:gtm-feedback:` custom emoji to your Slack workspace:
+
+    1. Go to your workspace settings → **Customize** → **Emoji**
+    2. Click **Add Custom Emoji**
+    3. Upload an image (or use an existing emoji)
+    4. Name it exactly: `gtm-feedback`
+    5. Save
+
+    <Tip>
+      Choose an emoji that's easy to recognize, like a lightbulb or megaphone. Team members will use this to flag feedback in conversations.
+    </Tip>
+  </Step>
+
+  <Step title="Connect to Web App">
+    Update your web app's environment variables to enable Slack integration:
+
+    1. Go to your web app's Vercel project settings
+    2. Add the following environment variables:
+       - `SLACK_BOT_TOKEN` - Your bot token (from Step 2)
+       - `SLACK_APP_VERIFICATION` - Your shared secret (from Step 2)
+       - `SLACK_DIGEST_CHANNEL_ID` - Channel ID for weekly digests (optional)
+       - `SLACK_GTM_FEEDBACK_CHANNEL_ID` - Channel ID for feedback notifications (optional)
+    3. Redeploy the web app
+
+    <Accordion title="How to find Channel IDs">
+      1. Open Slack in a browser
+      2. Navigate to the desired channel
+      3. The URL will contain the channel ID: `https://app.slack.com/client/T.../C...`
+      4. Copy the ID starting with `C`
+    </Accordion>
+  </Step>
+</Steps>
+
+## Testing the Integration
+
+<Steps>
+  <Step title="Add App to Channel">
+    1. Go to any Slack channel
+    2. Type `/invite @GTM Feedback` (or your app name)
+    3. The bot should join the channel
+  </Step>
+
+  <Step title="Test Reaction Capture">
+    1. Find a message in the channel
+    2. React with `:gtm-feedback:`
+    3. A modal should appear to capture feedback details
+    4. Submit and verify it appears in your web app
+  </Step>
+
+  <Step title="Test AI Assistant">
+    1. Send a direct message to the GTM Feedback bot
+    2. Try asking: "Show me recent feedback"
+    3. The bot should respond with feedback data
+  </Step>
+</Steps>
+
+## Local Development
+
+To develop the Slack app locally:
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Set Up Environment">
+    ```bash
+    cp apps/slack-app/.env.example apps/slack-app/.env
+    ```
+
+    Fill in your Slack credentials from [api.slack.com/apps](https://api.slack.com/apps).
+  </Step>
+
+  <Step title="Link to Slack App">
+    ```bash
+    slack app link
+    ```
+
+    - Select "yes" to update manifest source to remote
+    - Enter your App ID
+    - Select "Local" environment
+  </Step>
+
+  <Step title="Start Dev Server">
+    ```bash
+    slack run
+    ```
+
+    This starts the server with automatic tunneling to Slack.
+  </Step>
+</Steps>
+
+## Project Structure
+
+The Slack app is organized as follows:
+
+```
+apps/slack-app/
+├── server/
+│   ├── app.ts                    # Bolt app initialization
+│   ├── api/slack/events.post.ts  # Event handler endpoint
+│   ├── lib/
+│   │   ├── ai/                   # AI assistant logic
+│   │   └── slack/                # Slack utilities
+│   └── listeners/
+│       ├── actions/              # Button click handlers
+│       ├── commands/             # Slash command handlers
+│       ├── events/               # Reaction & mention handlers
+│       ├── messages/             # Direct message handlers
+│       ├── shortcuts/            # Global shortcut handlers
+│       └── views/                # Modal submission handlers
+└── manifest.json                 # Slack app manifest
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Request URL verification fails" icon="triangle-exclamation">
+    - Ensure your Vercel deployment is successful and accessible
+    - Check that `SLACK_SIGNING_SECRET` is correctly set in Vercel
+    - Verify the URL ends with `/api/slack/events`
+    - Check Vercel function logs for errors
+  </Accordion>
+
+  <Accordion title="Emoji reaction doesn't trigger modal" icon="triangle-exclamation">
+    - Verify the emoji is named exactly `gtm-feedback`
+    - Check that Event Subscriptions are enabled and verified
+    - Ensure the bot is added to the channel
+    - Check Vercel logs for event processing errors
+  </Accordion>
+
+  <Accordion title="Bot doesn't respond to messages" icon="triangle-exclamation">
+    - Verify `SLACK_BOT_TOKEN` is correctly set
+    - Check bot token scopes in Slack app settings
+    - Ensure Interactivity is enabled and URL is verified
+    - Check for errors in Vercel function logs
+  </Accordion>
+
+  <Accordion title="Feedback not syncing to web app" icon="triangle-exclamation">
+    - Verify `SLACK_APP_VERIFICATION` matches in both apps
+    - Check that web app `SLACK_BOT_TOKEN` is set
+    - Verify database connection in web app
+    - Check web app logs for API errors
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Complete Slack configuration reference
+  </Card>
+  <Card title="Slack Integration Guide" icon="book" href="/essentials/slack-integration">
+    Learn how to use Slack features
+  </Card>
+</CardGroup>

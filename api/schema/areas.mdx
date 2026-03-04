@@ -1,0 +1,188 @@
+---
+title: 'Areas table'
+description: 'Database schema reference for the areas table'
+keywords: ['areas', 'schema', 'database', 'table', 'drizzle']
+---
+
+## Overview
+
+The `areas` table stores product areas or categories used to organize feature requests. Each area represents a logical grouping of features within the product.
+
+## Fields
+
+<ResponseField name="id" type="varchar(36)" required>
+  Primary key. Fixed-length identifier for the area (typically a UUID or custom ID).
+</ResponseField>
+
+<ResponseField name="name" type="text" required>
+  Display name of the area. Must be unique.
+</ResponseField>
+
+<ResponseField name="slug" type="text" required>
+  URL-friendly identifier for the area. Must be unique.
+</ResponseField>
+
+<ResponseField name="description" type="text" required>
+  Detailed description of what this area encompasses.
+</ResponseField>
+
+<ResponseField name="firehoseChannel" type="text">
+  Optional Slack or chat channel ID for notifications related to this area.
+</ResponseField>
+
+## Relationships
+
+Areas are referenced by requests through the `requests.areaIds` array field. This creates a many-to-many relationship where:
+
+- A single request can belong to multiple areas
+- A single area can be associated with multiple requests
+
+<Note>
+  The relationship is maintained through an array column rather than a junction table. Use array containment queries to find requests by area.
+</Note>
+
+## Indexes
+
+<ResponseField name="areas_name_key" type="unique">
+  Unique constraint on the `name` field.
+</ResponseField>
+
+<ResponseField name="areas_slug_key" type="unique">
+  Unique constraint on the `slug` field.
+</ResponseField>
+
+## Example queries
+
+### Query all areas
+
+```typescript
+import { db } from './db';
+import { areas } from './schema';
+
+const allAreas = await db.query.areas.findMany({
+  orderBy: (areas, { asc }) => [asc(areas.name)],
+});
+```
+
+### Get area by slug
+
+```typescript
+import { db } from './db';
+import { areas } from './schema';
+import { eq } from 'drizzle-orm';
+
+const area = await db.query.areas.findFirst({
+  where: eq(areas.slug, 'authentication'),
+});
+```
+
+### Find requests in a specific area
+
+```typescript
+import { db } from './db';
+import { requests, areas } from './schema';
+import { eq, arrayContains } from 'drizzle-orm';
+
+// First get the area
+const area = await db.query.areas.findFirst({
+  where: eq(areas.slug, 'authentication'),
+});
+
+// Then find requests containing this area ID
+if (area) {
+  const requestsInArea = await db.query.requests.findMany({
+    where: arrayContains(requests.areaIds, [area.id]),
+    with: {
+      user: true,
+    },
+  });
+}
+```
+
+### Create a new area
+
+```typescript
+import { db } from './db';
+import { areas } from './schema';
+import { randomUUID } from 'crypto';
+
+const newArea = await db.insert(areas).values({
+  id: randomUUID(),
+  name: 'Authentication',
+  slug: 'authentication',
+  description: 'User authentication, SSO, and identity management features',
+  firehoseChannel: 'C01234567',
+}).returning();
+```
+
+### Update area details
+
+```typescript
+import { db } from './db';
+import { areas } from './schema';
+import { eq } from 'drizzle-orm';
+
+const updated = await db
+  .update(areas)
+  .set({
+    description: 'Updated description for the area',
+    firehoseChannel: 'C98765432',
+  })
+  .where(eq(areas.slug, 'authentication'))
+  .returning();
+```
+
+### Get area usage statistics
+
+```typescript
+import { db } from './db';
+import { areas, requests } from './schema';
+import { sql, arrayContains } from 'drizzle-orm';
+
+// Count how many requests reference each area
+const areaStats = await Promise.all(
+  (await db.select().from(areas)).map(async (area) => {
+    const count = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(requests)
+      .where(arrayContains(requests.areaIds, [area.id]));
+    
+    return {
+      ...area,
+      requestCount: count[0].count,
+    };
+  })
+);
+```
+
+### Delete an area
+
+```typescript
+import { db } from './db';
+import { areas } from './schema';
+import { eq } from 'drizzle-orm';
+
+// Note: This will not cascade delete. You should update or remove
+// the area ID from requests.areaIds arrays before deleting
+await db.delete(areas).where(eq(areas.id, 'area-id-here'));
+```
+
+<Warning>
+  When deleting an area, make sure to remove its ID from all `requests.areaIds` arrays first, as the deletion will not cascade automatically.
+</Warning>
+
+### Search areas
+
+```typescript
+import { db } from './db';
+import { areas } from './schema';
+import { or, ilike } from 'drizzle-orm';
+
+const searchTerm = '%auth%';
+const results = await db.query.areas.findMany({
+  where: or(
+    ilike(areas.name, searchTerm),
+    ilike(areas.description, searchTerm)
+  ),
+});
+```

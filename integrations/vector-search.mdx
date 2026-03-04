@@ -1,0 +1,467 @@
+---
+title: Vector Search
+description: Implement semantic search with Upstash Vector and OpenAI embeddings
+icon: magnifying-glass
+---
+
+## Overview
+
+GTM Feedback uses vector embeddings to power semantic search across feature requests. This enables finding similar requests based on meaning rather than just keywords, helping identify duplicates and related feedback.
+
+## Architecture
+
+The vector search system combines:
+
+- **Upstash Vector** - Serverless vector database for similarity search
+- **OpenAI Embeddings** - Generate 384-dimension text embeddings
+- **AI SDK** - Unified embedding generation interface
+
+### How It Works
+
+<Steps>
+  <Step title="Generate embedding">
+    When a request is created, combine title and description into a single text representation.
+  </Step>
+
+  <Step title="Create vector">
+    Use OpenAI's `text-embedding-3-small` model to generate a 384-dimension embedding vector.
+  </Step>
+
+  <Step title="Store in Upstash">
+    Upsert the vector into Upstash Vector with the request ID and metadata.
+  </Step>
+
+  <Step title="Search">
+    Query with a new embedding to find the most similar requests by cosine similarity.
+  </Step>
+</Steps>
+
+## Upstash Vector Setup
+
+### Create a Vector Index
+
+1. Sign up at [Upstash Console](https://console.upstash.com)
+2. Create a new Vector index with:
+   - **Dimensions:** 384 (matches OpenAI text-embedding-3-small)
+   - **Similarity Metric:** Cosine
+   - **Region:** Choose closest to your application
+
+### Environment Variables
+
+Add to your `.env` file:
+
+```bash
+# Upstash Vector
+UPSTASH_VECTOR_REST_URL=https://your-index-url.upstash.io
+UPSTASH_VECTOR_REST_TOKEN=your_rest_token
+
+# OpenAI for embeddings
+OPENAI_API_KEY=sk-your-openai-api-key
+```
+
+## Embedding Generation
+
+The embeddings package is in `packages/ai/src/embeddings/index.ts`:
+
+### Single Embedding
+
+```typescript packages/ai/src/embeddings/index.ts
+import { createOpenAI } from "@ai-sdk/openai";
+import { embed } from "ai";
+
+export async function createRequestEmbedding(
+  title: string,
+  description: string,
+  apiKey: string,
+): Promise<number[] | null> {
+  if (!apiKey) {
+    console.error("OpenAI API key is required");
+    return null;
+  }
+
+  try {
+    const openai = createOpenAI({ apiKey });
+    const text = `${title}\n\n${description}`;
+    
+    const { embedding } = await embed({
+      model: openai.embeddingModel("text-embedding-3-small"),
+      value: text,
+      providerOptions: {
+        openai: {
+          dimensions: 384, // Match Upstash Vector dimension
+        },
+      },
+    });
+
+    return embedding;
+  } catch (error) {
+    console.error("Failed to create embedding:", error);
+    return null;
+  }
+}
+```
+
+### Batch Embeddings
+
+For efficient processing of multiple requests:
+
+```typescript packages/ai/src/embeddings/index.ts
+import { embedMany } from "ai";
+
+export async function createRequestEmbeddings(
+  items: Array<{ title: string; description: string }>,
+  apiKey: string,
+): Promise<number[][] | null> {
+  const openai = createOpenAI({ apiKey });
+  const texts = items.map((item) => `${item.title}\n\n${item.description}`);
+  
+  const { embeddings } = await embedMany({
+    model: openai.embeddingModel("text-embedding-3-small"),
+    values: texts,
+    providerOptions: {
+      openai: { dimensions: 384 },
+    },
+  });
+
+  return embeddings;
+}
+```
+
+<Tip>
+  Use `embedMany` for batch processing - it's more efficient than multiple individual calls.
+</Tip>
+
+## Storing Vectors
+
+### Single Vector Storage
+
+```typescript packages/ai/src/embeddings/index.ts
+import { Index } from "@upstash/vector";
+
+export async function storeRequestEmbedding(
+  requestId: string,
+  embedding: number[],
+  url: string,
+  token: string,
+  metadata?: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const index = new Index({
+      url,
+      token,
+    });
+
+    // Validate dimension
+    if (embedding.length !== 384) {
+      console.error(
+        `Invalid embedding dimension: expected 384, got ${embedding.length}`
+      );
+      return false;
+    }
+
+    await index.upsert({
+      id: requestId,
+      vector: embedding,
+      metadata: metadata || {},
+    });
+
+    return true;
+  } catch (error) {
+    console.error(`Failed to store embedding for ${requestId}:`, error);
+    return false;
+  }
+}
+```
+
+### Batch Vector Storage
+
+```typescript packages/ai/src/embeddings/index.ts
+export async function storeRequestEmbeddings(
+  items: Array<{
+    requestId: string;
+    embedding: number[];
+    metadata?: Record<string, unknown>;
+  }>,
+  url: string,
+  token: string,
+): Promise<Set<string>> {
+  const index = new Index({ url, token });
+  const successfulIds = new Set<string>();
+
+  // Prepare vectors
+  const vectors = items.map((item) => ({
+    id: item.requestId,
+    vector: item.embedding,
+    metadata: item.metadata || {},
+  }));
+
+  // Upsert in parallel
+  const results = await Promise.allSettled(
+    vectors.map((vector) => index.upsert(vector))
+  );
+
+  // Track successful uploads
+  results.forEach((result, idx) => {
+    if (result.status === "fulfilled") {
+      successfulIds.add(vectors[idx].id);
+    }
+  });
+
+  return successfulIds;
+}
+```
+
+## Similarity Search
+
+### Finding Similar Requests
+
+```typescript packages/ai/src/embeddings/index.ts
+export async function findSimilarRequests(
+  embedding: number[],
+  url: string,
+  token: string,
+  limit: number = 10,
+  excludeIds: string[] = [],
+): Promise<
+  Array<{ id: string; score: number; metadata?: Record<string, unknown> }>
+> {
+  const index = new Index({ url, token });
+
+  const results = await index.query({
+    vector: embedding,
+    topK: limit + excludeIds.length,
+    includeMetadata: true,
+  });
+
+  // Filter excluded IDs and limit results
+  return results
+    .filter((result) => !excludeIds.includes(String(result.id)))
+    .slice(0, limit)
+    .map((result) => ({
+      id: String(result.id),
+      score: result.score,
+      metadata: result.metadata,
+    }));
+}
+```
+
+### Search Scores
+
+Upstash Vector returns cosine similarity scores between 0 and 1:
+
+- **0.9 - 1.0** - Nearly identical requests
+- **0.8 - 0.9** - Very similar, likely duplicates
+- **0.7 - 0.8** - Related requests
+- **< 0.7** - Different requests
+
+<Note>
+  Adjust similarity thresholds based on your use case and data characteristics.
+</Note>
+
+## Complete Workflow Example
+
+Here's a complete example of adding vector search to a request:
+
+```typescript
+import {
+  createRequestEmbedding,
+  storeRequestEmbedding,
+  findSimilarRequests,
+} from "@feedback/ai/embeddings";
+
+// 1. Create a new request
+const request = {
+  id: "req_123",
+  title: "Add dark mode support",
+  description: "Users want the ability to toggle dark mode in the dashboard",
+};
+
+// 2. Generate embedding
+const embedding = await createRequestEmbedding(
+  request.title,
+  request.description,
+  process.env.OPENAI_API_KEY!
+);
+
+if (!embedding) {
+  throw new Error("Failed to generate embedding");
+}
+
+// 3. Store in Upstash Vector
+const stored = await storeRequestEmbedding(
+  request.id,
+  embedding,
+  process.env.UPSTASH_VECTOR_REST_URL!,
+  process.env.UPSTASH_VECTOR_REST_TOKEN!,
+  {
+    title: request.title,
+    createdAt: new Date().toISOString(),
+  }
+);
+
+if (!stored) {
+  throw new Error("Failed to store embedding");
+}
+
+// 4. Find similar requests
+const similar = await findSimilarRequests(
+  embedding,
+  process.env.UPSTASH_VECTOR_REST_URL!,
+  process.env.UPSTASH_VECTOR_REST_TOKEN!,
+  5, // top 5 results
+  [request.id] // exclude self
+);
+
+console.log("Similar requests:", similar);
+// [
+//   { id: "req_456", score: 0.89, metadata: { ... } },
+//   { id: "req_789", score: 0.76, metadata: { ... } },
+// ]
+```
+
+## Updating and Deleting Vectors
+
+### Update Embedding
+
+```typescript
+import { updateRequestEmbedding } from "@feedback/ai/embeddings";
+
+// Generate new embedding
+const newEmbedding = await createRequestEmbedding(
+  updatedTitle,
+  updatedDescription,
+  apiKey
+);
+
+// Update in Upstash (upsert handles updates)
+await updateRequestEmbedding(
+  requestId,
+  newEmbedding,
+  vectorUrl,
+  vectorToken,
+  { updatedAt: new Date().toISOString() }
+);
+```
+
+### Delete Embedding
+
+```typescript packages/ai/src/embeddings/index.ts
+export async function deleteRequestEmbedding(
+  requestId: string,
+  url: string,
+  token: string,
+): Promise<boolean> {
+  const index = new Index({ url, token });
+  
+  try {
+    await index.delete([requestId]);
+    return true;
+  } catch (error) {
+    console.error(`Failed to delete embedding ${requestId}:`, error);
+    return false;
+  }
+}
+```
+
+## Batch Sync Workflow
+
+Sync embeddings for all existing requests:
+
+```typescript apps/www/src/workflows/sync-embeddings/index.ts
+import { db } from "@feedback/db";
+import {
+  createRequestEmbeddings,
+  storeRequestEmbeddings,
+} from "@feedback/ai/embeddings";
+
+// Fetch all requests without embeddings
+const requests = await db.query.requests.findMany({
+  where: (requests, { isNull }) => isNull(requests.embeddingId),
+});
+
+// Generate embeddings in batch
+const embeddings = await createRequestEmbeddings(
+  requests.map((r) => ({ title: r.title, description: r.description })),
+  process.env.OPENAI_API_KEY!
+);
+
+if (!embeddings) {
+  throw new Error("Failed to generate embeddings");
+}
+
+// Store all embeddings
+const items = requests.map((request, idx) => ({
+  requestId: request.id,
+  embedding: embeddings[idx],
+  metadata: {
+    title: request.title,
+    status: request.status,
+  },
+}));
+
+const successfulIds = await storeRequestEmbeddings(
+  items,
+  process.env.UPSTASH_VECTOR_REST_URL!,
+  process.env.UPSTASH_VECTOR_REST_TOKEN!
+);
+
+console.log(`Synced ${successfulIds.size} / ${requests.length} embeddings`);
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Consistent Text Format" icon="align-left">
+    Always combine title and description in the same format for comparable embeddings
+  </Card>
+  <Card title="Validate Dimensions" icon="ruler">
+    Check embedding dimensions match your index (384) before upserting
+  </Card>
+  <Card title="Handle Errors" icon="triangle-exclamation">
+    Gracefully handle API failures and return null/empty results
+  </Card>
+  <Card title="Batch Operations" icon="layer-group">
+    Use batch functions for bulk operations to reduce API calls
+  </Card>
+</CardGroup>
+
+## Cost Optimization
+
+### Embedding Costs
+
+- **text-embedding-3-small**: $0.02 per 1M tokens
+- Average request: ~100 tokens
+- **1000 requests**: ~$0.002
+
+### Upstash Vector Costs
+
+- **Free tier**: 10,000 queries/day
+- **Paid**: Pay per query beyond free tier
+- Storage is included
+
+<Tip>
+  Cache embeddings in your database to avoid regenerating them on every search.
+</Tip>
+
+## Monitoring
+
+Track embedding generation and search performance:
+
+```typescript
+const startTime = Date.now();
+const embedding = await createRequestEmbedding(title, description, apiKey);
+const duration = Date.now() - startTime;
+
+console.log(`Generated embedding in ${duration}ms`);
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="AI Models" icon="brain" href="/integrations/ai-models">
+    Learn about OpenAI integration and AI SDK usage
+  </Card>
+  <Card title="Database" icon="database" href="/architecture/database">
+    Store embedding metadata in PostgreSQL
+  </Card>
+</CardGroup>

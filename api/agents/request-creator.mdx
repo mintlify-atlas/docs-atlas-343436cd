@@ -1,0 +1,328 @@
+---
+title: 'Request Creator Agent'
+description: 'AI agent for matching customer pain to existing requests or creating new feature requests'
+---
+
+## Overview
+
+The Request Creator Agent intelligently processes customer feedback by either matching it to existing feature requests or creating new ones. It supports multiple modes of operation to handle different workflow scenarios.
+
+**Location**: `packages/ai/src/agents/requests/index.ts`
+
+## Purpose
+
+Processes customer pain points by:
+- Matching feedback to existing feature requests with confidence scoring
+- Creating new feature requests with proper categorization
+- Finding related requests for linking
+- Deciding whether to match or create based on similarity
+
+## Agent Configuration
+
+**Model**: Claude Haiku (via `claudeHaiku`)
+
+**Tools**: Conditional (uses tools when data is not pre-provided)
+
+**Output**: Structured object based on operation mode
+
+## Modes of Operation
+
+The agent supports four distinct modes:
+
+### 1. Match Mode
+
+Finds the best matching existing feature request for customer pain.
+
+**System Prompt**:
+```
+You an AI agent that matches customer feedback to existing feature requests.
+
+Analyze if the customer pain aligns with any of the existing feature requests.
+
+Return:
+- requestId: The ID if there's a match, or null if no good match exists
+- confidence: A score from 0.0 to 1.0 indicating match quality:
+  * 0.9-1.0: The customer pain is describing the exact same feature/issue
+  * 0.8-0.89: Strong match, same general feature/issue with minor differences
+  * 0.7-0.79: Moderate match, related but not identical
+  * Below 0.7: Weak match or unrelated - return null for requestId
+- reason: Brief explanation of why this is or isn't a match
+
+Only return a requestId if confidence is 0.8 or higher. Be conservative - it's better to create a new feature request than incorrectly match.
+
+If candidates are not provided, use the getCandidateRequests tool to fetch them.
+```
+
+### 2. Create Mode
+
+Creates a new feature request from customer pain description.
+
+**System Prompt**:
+```
+You an AI agent that creates feature requests from customer feedback.
+
+Based on the customer pain description, create:
+1. A clear, concise title (10-200 characters) that summarizes the feature or issue
+2. A detailed description (50-500 characters, max 2 sentences) that explains the problem. Focus on the pain rather than prescribing solutions.
+3. Select one or more product areas (by ID) that this feedback relates to
+
+If product areas are not provided, use the getProductAreas tool to fetch them.
+```
+
+### 3. Match or Create Mode
+
+Intelligently decides whether to match or create based on similarity.
+
+**System Prompt**:
+```
+You an AI agent that processes customer feedback by either matching to existing requests or creating new ones.
+
+Your workflow:
+1. First, try to match the customer pain to existing feature requests
+2. If a high-confidence match exists (>= 0.8), return decision: "matched" with the requestId
+3. If no good match exists, return decision: "created" with a new title, description, and areaIds
+
+Be conservative with matching - it's better to create new feedback than incorrectly merge issues.
+
+Use tools to fetch candidates and product areas if not provided.
+```
+
+### 4. Find Related Mode
+
+Finds related (but not identical) feature requests.
+
+**System Prompt**:
+```
+You an AI agent that finds related (not identical) feature requests.
+
+A related feature request is one that:
+- Addresses a similar problem or feature area
+- Is usually in the same product domain
+- Could benefit from being linked together for context
+
+Return:
+- relatedRequestId: The ID of the most related request, or null if none
+- confidence: Score from 0.0 to 1.0 indicating how related they are
+- reason: Brief explanation of the relationship
+
+Only return a relatedRequestId if confidence is 0.8 or higher.
+```
+
+## Available Tools
+
+### getCandidateRequests
+
+Fetch candidate request items to match against.
+
+<ParamField path="query" type="string" required>
+  The pain/query to search for
+</ParamField>
+
+<ParamField path="areaIds" type="string[]">
+  Filter to specific product areas
+</ParamField>
+
+<ParamField path="limit" type="number" default={50}>
+  Max results to return
+</ParamField>
+
+### getProductAreas
+
+Fetch all available product areas for categorization.
+
+*No parameters required*
+
+### getRequestById
+
+Fetch a specific request item by ID.
+
+<ParamField path="id" type="string" required>
+  The request ID to fetch
+</ParamField>
+
+## Input
+
+<ParamField path="mode" type="enum">
+  Operation mode: `match`, `create`, `match_or_create`, or `find_related`
+</ParamField>
+
+<ParamField path="customerPain" type="string">
+  Description of the customer pain point or feature request
+</ParamField>
+
+<ParamField path="candidates" type="object[]">
+  Optional pre-filtered list of candidate requests
+  <ParamField path="id" type="string" required />
+  <ParamField path="title" type="string" required />
+  <ParamField path="description" type="string" required />
+  <ParamField path="areaIds" type="string[]" />
+</ParamField>
+
+<ParamField path="productAreas" type="object[]">
+  Optional list of available product areas
+  <ParamField path="id" type="string" required />
+  <ParamField path="name" type="string" required />
+</ParamField>
+
+<ParamField path="requestId" type="string">
+  Request ID (used in `find_related` mode)
+</ParamField>
+
+## Output
+
+The output shape depends on the operation mode:
+
+### Match Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="type" type="string" value="match" />
+  <ResponseField name="requestId" type="string | null">
+    The ID of the matching request, or null if no match
+  </ResponseField>
+  <ResponseField name="confidence" type="number">
+    Confidence score from 0.0 to 1.0
+  </ResponseField>
+  <ResponseField name="reason" type="string">
+    Explanation for the match decision
+  </ResponseField>
+</ResponseField>
+
+### Create Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="type" type="string" value="create" />
+  <ResponseField name="title" type="string">
+    Feature request title (5-200 characters)
+  </ResponseField>
+  <ResponseField name="description" type="string">
+    Feature request description (10-1000 characters)
+  </ResponseField>
+  <ResponseField name="areaIds" type="string[]">
+    Product area IDs this relates to (minimum 1)
+  </ResponseField>
+</ResponseField>
+
+### Match or Create Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="type" type="string" value="match_or_create" />
+  <ResponseField name="decision" type="enum">
+    `matched` or `created`
+  </ResponseField>
+  <ResponseField name="requestId" type="string | null">
+    Matched request ID (if decision is `matched`)
+  </ResponseField>
+  <ResponseField name="confidence" type="number">
+    Match confidence (if decision is `matched`)
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    New title (if decision is `created`)
+  </ResponseField>
+  <ResponseField name="description" type="string">
+    New description (if decision is `created`)
+  </ResponseField>
+  <ResponseField name="areaIds" type="string[]">
+    Area IDs (if decision is `created`)
+  </ResponseField>
+  <ResponseField name="reason" type="string">
+    Explanation for the decision
+  </ResponseField>
+</ResponseField>
+
+### Find Related Output
+
+<ResponseField name="output" type="object">
+  <ResponseField name="type" type="string" value="find_related" />
+  <ResponseField name="relatedRequestId" type="string | null">
+    ID of related request, or null if none found
+  </ResponseField>
+  <ResponseField name="confidence" type="number">
+    Confidence score for the relation (0.0 to 1.0)
+  </ResponseField>
+  <ResponseField name="reason" type="string">
+    Why this request is related
+  </ResponseField>
+</ResponseField>
+
+## Usage Examples
+
+### Create a New Feature Request
+
+From `apps/www/src/workflows/shared/create-new-request.ts`:
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.request.generate({
+  mode: "create",
+  customerPain: "Users can't export analytics data to CSV",
+  productAreas: [
+    { id: "analytics-id", name: "Analytics" },
+    { id: "export-id", name: "Export" }
+  ]
+});
+
+if (result.output.type === "create") {
+  console.log(`Title: ${result.output.title}`);
+  console.log(`Description: ${result.output.description}`);
+  console.log(`Areas: ${result.output.areaIds.join(", ")}`);
+}
+```
+
+### Match Customer Pain to Existing Request
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.request.generate({
+  mode: "match",
+  customerPain: "Need to download reports as spreadsheets"
+});
+
+if (result.output.type === "match" && result.output.requestId) {
+  console.log(`Matched to request: ${result.output.requestId}`);
+  console.log(`Confidence: ${result.output.confidence}`);
+  console.log(`Reason: ${result.output.reason}`);
+}
+```
+
+### Match or Create (Auto-Decision)
+
+```typescript
+import { agent } from "@feedback/ai/agents";
+
+const result = await agent.request.generate({
+  customerPain: "Customers want real-time collaboration features"
+});
+
+if (result.output.type === "match_or_create") {
+  if (result.output.decision === "matched") {
+    console.log(`Matched to: ${result.output.requestId}`);
+  } else {
+    console.log(`Created new: ${result.output.title}`);
+  }
+}
+```
+
+## Context Configuration
+
+Customize the agent behavior by providing a `RequestToolContext`:
+
+```typescript
+import { createRequestAgent } from "@feedback/ai/agents";
+
+const requestAgent = createRequestAgent({
+  fetchCandidateRequests: async (query, areaIds, limit) => {
+    // Custom candidate fetching logic
+    return await myDB.searchRequests(query, areaIds, limit);
+  },
+  fetchProductAreas: async () => {
+    // Custom product area fetching
+    return await myDB.getAreas();
+  },
+  fetchRequestById: async (id) => {
+    // Custom request fetching
+    return await myDB.getRequest(id);
+  }
+});
+```

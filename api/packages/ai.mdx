@@ -1,0 +1,420 @@
+---
+title: '@feedback/ai'
+description: 'AI package for GTM Feedback with agents, models, embeddings, and tools'
+---
+
+## Overview
+
+The `@feedback/ai` package provides a comprehensive AI toolkit for the GTM Feedback platform, including specialized agents for Slack integration, request matching, search, analytics, and identity resolution. Built on top of the Vercel AI SDK with support for OpenAI and Anthropic models.
+
+## Installation
+
+```bash
+npm install @feedback/ai
+```
+
+## Package Information
+
+<ParamField path="name" type="string">
+  @feedback/ai
+</ParamField>
+
+<ParamField path="version" type="string">
+  0.0.1
+</ParamField>
+
+<ParamField path="dependencies" type="object">
+  - `@ai-sdk/openai`: ^3.0.0
+  - `@ai-sdk/devtools`: 0.0.1
+  - `@upstash/vector`: ^1.0.0
+  - `ai`: 6.0.5
+  - `zod`: ^4.2.1
+</ParamField>
+
+## Exports
+
+The package provides multiple export paths for different functionalities:
+
+### Main Export
+
+```typescript
+import * from '@feedback/ai'
+```
+
+Re-exports all functionality from the Vercel AI SDK (`ai` package).
+
+### Models
+
+```typescript
+import { claudeSonnet, claudeHaiku, gpt4oMini } from '@feedback/ai/models'
+```
+
+<ResponseField name="claudeSonnet" type="LanguageModel">
+  Wrapped Claude Sonnet 4 model with DevTools middleware (development only)
+</ResponseField>
+
+<ResponseField name="claudeHaiku" type="LanguageModel">
+  Wrapped Claude Haiku 4.5 model with DevTools middleware (development only)
+</ResponseField>
+
+<ResponseField name="gpt4oMini" type="LanguageModel">
+  Wrapped GPT-4o Mini model with DevTools middleware (development only)
+</ResponseField>
+
+### Agents
+
+```typescript
+import { agent, createAgent } from '@feedback/ai/agents'
+```
+
+The default `agent` instance provides access to all specialized agents:
+
+<CodeGroup>
+```typescript Default Agent
+import { agent } from '@feedback/ai/agents'
+
+// Use Slack agent to extract customer pain from a message
+const result = await agent.slack.generate({
+  mode: 'extract',
+  ref: { channel: 'C123', threadTs: '1234567890.123456' }
+})
+
+// Use Request agent to match customer pain to existing requests
+const match = await agent.request.generate({
+  customerPain: "Users can't export data to CSV",
+  candidates: existingRequests,
+  mode: 'match'
+})
+```
+
+```typescript Custom Agent
+import { createAgent } from '@feedback/ai/agents'
+
+// Create custom agent with overridden context
+const customAgent = createAgent({
+  slack: {
+    fetchThreadMessages: async (channel, ts) => {
+      return mySlackClient.getThread(channel, ts)
+    }
+  }
+})
+```
+</CodeGroup>
+
+#### Agent Types
+
+<ParamField path="agent.slack" type="AgentSlack">
+  Extract customer pain from Slack messages, compose notifications, and chat with users
+  
+  **Methods:**
+  - `generate(input)`: Extract pain or compose messages
+  - `chat(input)`: Stream chat responses
+</ParamField>
+
+<ParamField path="agent.request" type="AgentRequest">
+  Match customer pain to existing requests or generate new request details
+  
+  **Methods:**
+  - `generate(input)`: Match, create, or find related requests
+</ParamField>
+
+<ParamField path="agent.search" type="AgentSearch">
+  Search and rank requests based on semantic similarity
+  
+  **Methods:**
+  - `generate(input)`: Search requests and return ranked matches
+</ParamField>
+
+<ParamField path="agent.analytics" type="AgentAnalytics">
+  Generate insights and analytics for areas or requests
+  
+  **Methods:**
+  - `generate(input)`: Generate analytics sections with visuals
+</ParamField>
+
+<ParamField path="agent.identity" type="AgentIdentity">
+  Resolve user identity from email addresses
+  
+  **Methods:**
+  - `generate(input)`: Match email to user ID
+</ParamField>
+
+### Specialized Agents
+
+```typescript
+import { createSlackAgent } from '@feedback/ai/agents/slack'
+import { createRequestAgent } from '@feedback/ai/agents/requests'
+import { createSearchAgent } from '@feedback/ai/agents/search'
+import { createAnalyticsAgent } from '@feedback/ai/agents/analytics'
+import { createIdentityAgent } from '@feedback/ai/agents/identity'
+```
+
+### Embeddings
+
+```typescript
+import {
+  createRequestEmbedding,
+  createRequestEmbeddings,
+  storeRequestEmbedding,
+  storeRequestEmbeddings,
+  findSimilarRequests,
+  updateRequestEmbedding,
+  deleteRequestEmbedding
+} from '@feedback/ai/embeddings'
+```
+
+<ResponseField name="createRequestEmbedding" type="function">
+  Creates an embedding vector for a single request
+  
+  **Parameters:**
+  - `title` (string): Request title
+  - `description` (string): Request description
+  - `apiKey` (string): OpenAI API key
+  
+  **Returns:** `Promise<number[] | null>`
+</ResponseField>
+
+<ResponseField name="createRequestEmbeddings" type="function">
+  Creates embedding vectors for multiple requests in batch
+  
+  **Parameters:**
+  - `items` (Array): Array of `{ title, description }` objects
+  - `apiKey` (string): OpenAI API key
+  
+  **Returns:** `Promise<number[][] | null>`
+</ResponseField>
+
+<ResponseField name="storeRequestEmbedding" type="function">
+  Stores an embedding in Upstash Vector
+  
+  **Parameters:**
+  - `requestId` (string): Unique request identifier
+  - `embedding` (number[]): 384-dimensional embedding vector
+  - `url` (string): Upstash Vector REST URL
+  - `token` (string): Upstash Vector REST token
+  - `metadata` (object, optional): Additional metadata
+  
+  **Returns:** `Promise<boolean>`
+</ResponseField>
+
+<ResponseField name="storeRequestEmbeddings" type="function">
+  Stores multiple embeddings in batch
+  
+  **Parameters:**
+  - `items` (Array): Array of `{ requestId, embedding, metadata? }` objects
+  - `url` (string): Upstash Vector REST URL
+  - `token` (string): Upstash Vector REST token
+  
+  **Returns:** `Promise<Set<string>>` - Set of successfully stored request IDs
+</ResponseField>
+
+<ResponseField name="findSimilarRequests" type="function">
+  Searches for similar requests using vector similarity
+  
+  **Parameters:**
+  - `embedding` (number[]): Query embedding vector
+  - `url` (string): Upstash Vector REST URL
+  - `token` (string): Upstash Vector REST token
+  - `limit` (number, optional): Maximum results (default: 10)
+  - `excludeIds` (string[], optional): Request IDs to exclude
+  
+  **Returns:** `Promise<Array<{ id, score, metadata? }>>`
+</ResponseField>
+
+<ResponseField name="updateRequestEmbedding" type="function">
+  Updates an existing embedding (alias for storeRequestEmbedding)
+  
+  **Parameters:** Same as `storeRequestEmbedding`
+  
+  **Returns:** `Promise<boolean>`
+</ResponseField>
+
+<ResponseField name="deleteRequestEmbedding" type="function">
+  Deletes an embedding from Upstash Vector
+  
+  **Parameters:**
+  - `requestId` (string): Request identifier to delete
+  - `url` (string): Upstash Vector REST URL
+  - `token` (string): Upstash Vector REST token
+  
+  **Returns:** `Promise<boolean>`
+</ResponseField>
+
+## Key Types
+
+### Agent Types
+
+<CodeGroup>
+```typescript AgentResult
+export interface AgentResult<T> {
+  output: T
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+  }
+  steps?: number
+}
+```
+
+```typescript SlackGenerateInput
+export interface SlackGenerateInput {
+  mode?: 'extract' | 'chat' | 'compose'
+  ref?: SlackRef
+  messages?: unknown[]
+  composeType?: 'match_notification' | 'proposal' | 'created_confirmation' | ...
+  composeContext?: {
+    requestUrl?: string
+    requestTitle?: string
+    summary?: string
+    matched?: boolean
+    customerPain?: string
+  }
+}
+```
+
+```typescript RequestGenerateInput
+export interface RequestGenerateInput {
+  customerPain?: string
+  candidates?: Array<{
+    id: string
+    title: string
+    description: string
+    areaIds?: string[]
+  }>
+  productAreas?: Array<{ id: string; name: string }>
+  requestId?: string
+  mode?: 'match' | 'create' | 'match_or_create' | 'find_related'
+}
+```
+
+```typescript SearchGenerateInput
+export interface SearchGenerateInput {
+  query: string
+  candidates?: Array<{
+    id: string
+    title: string
+    description: string
+    areaIds?: string[]
+  }>
+  context?: string
+  scope?: {
+    areaIds?: string[]
+  }
+}
+```
+
+```typescript AnalyticsGenerateInput
+export interface AnalyticsGenerateInput {
+  scope: AnalyticsScope
+}
+
+export type AnalyticsScope =
+  | { type: 'area'; slug: string }
+  | { type: 'request'; id: string }
+```
+</CodeGroup>
+
+## Usage Examples
+
+<CodeGroup>
+```typescript Slack Extraction
+import { agent } from '@feedback/ai/agents'
+
+const result = await agent.slack.generate({
+  mode: 'extract',
+  ref: {
+    channel: 'C123456',
+    threadTs: '1234567890.123456'
+  }
+})
+
+if (result.output.type === 'extraction') {
+  console.log('Customer pain:', result.output.painDescription)
+  console.log('Is customer-specific:', result.output.isCustomerSpecific)
+}
+```
+
+```typescript Request Matching
+import { agent } from '@feedback/ai/agents'
+
+const result = await agent.request.generate({
+  customerPain: "Can't export analytics to CSV format",
+  candidates: existingRequests,
+  mode: 'match_or_create'
+})
+
+if (result.output.decision === 'matched') {
+  console.log('Matched request:', result.output.requestId)
+  console.log('Confidence:', result.output.confidence)
+} else {
+  console.log('New request:', result.output.title)
+  console.log('Areas:', result.output.areaIds)
+}
+```
+
+```typescript Embeddings
+import {
+  createRequestEmbedding,
+  storeRequestEmbedding,
+  findSimilarRequests
+} from '@feedback/ai/embeddings'
+
+// Create and store embedding
+const embedding = await createRequestEmbedding(
+  'CSV Export',
+  'Users need ability to export data to CSV',
+  process.env.OPENAI_API_KEY
+)
+
+if (embedding) {
+  await storeRequestEmbedding(
+    'req_123',
+    embedding,
+    process.env.UPSTASH_VECTOR_REST_URL,
+    process.env.UPSTASH_VECTOR_REST_TOKEN
+  )
+}
+
+// Find similar requests
+const similar = await findSimilarRequests(
+  embedding,
+  process.env.UPSTASH_VECTOR_REST_URL,
+  process.env.UPSTASH_VECTOR_REST_TOKEN,
+  5 // limit
+)
+
+console.log('Similar requests:', similar)
+```
+
+```typescript Analytics
+import { agent } from '@feedback/ai/agents'
+
+const result = await agent.analytics.generate({
+  scope: { type: 'area', slug: 'analytics' }
+})
+
+for (const section of result.output.sections) {
+  console.log(`${section.title} (${section.importance})`)
+  console.log(section.summary)
+  console.log('Visuals:', section.visuals)
+}
+```
+</CodeGroup>
+
+## Environment Variables
+
+<ParamField path="OPENAI_API_KEY" type="string" required>
+  OpenAI API key for embeddings and GPT models
+</ParamField>
+
+<ParamField path="UPSTASH_VECTOR_REST_URL" type="string" required>
+  Upstash Vector REST API URL for embedding storage
+</ParamField>
+
+<ParamField path="UPSTASH_VECTOR_REST_TOKEN" type="string" required>
+  Upstash Vector REST API token for authentication
+</ParamField>
+
+<ParamField path="NODE_ENV" type="string">
+  Set to 'development' to enable AI DevTools middleware
+</ParamField>

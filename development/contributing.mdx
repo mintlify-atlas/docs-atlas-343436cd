@@ -1,0 +1,628 @@
+---
+title: Contributing Guidelines
+description: How to contribute to GTM Feedback
+---
+
+## Ways to Contribute
+
+Thank you for your interest in improving GTM Feedback! Whether you're reporting bugs, suggesting features, or sending a pull request, contributions are welcome.
+
+<CardGroup cols={3}>
+  <Card title="Report Bugs" icon="bug">
+    Help us identify and fix issues
+  </Card>
+  
+  <Card title="Request Features" icon="lightbulb">
+    Suggest new functionality
+  </Card>
+  
+  <Card title="Contribute Code" icon="code">
+    Submit pull requests
+  </Card>
+</CardGroup>
+
+## Reporting Bugs
+
+Please open a GitHub issue and include:
+
+<Steps>
+  <Step title="Clear title">
+    Describe the bug concisely in the title
+  </Step>
+  
+  <Step title="Steps to reproduce">
+    Detailed steps showing how to reproduce the issue
+  </Step>
+  
+  <Step title="Expected vs actual behavior">
+    What you expected to happen vs what actually happened
+  </Step>
+  
+  <Step title="Environment details">
+    - Browser and version
+    - Operating system
+    - Node.js version
+    - pnpm version
+  </Step>
+  
+  <Step title="Screenshots or error messages">
+    Include screenshots, console errors, or stack traces if applicable
+  </Step>
+</Steps>
+
+## Requesting Features
+
+For feature requests, open a GitHub issue and describe:
+
+<Accordion title="Feature request template">
+  - **The problem**: What problem are you trying to solve?
+  - **Proposed solution**: Your ideas for how to solve it
+  - **User benefit**: How would this benefit users of the template?
+  - **Alternatives**: Any alternative solutions you've considered
+</Accordion>
+
+## Improving Documentation
+
+Documentation fixes and clarifications are very welcome!
+
+<Tabs>
+  <Tab title="Small Changes">
+    For small typos or clarifications, use GitHub's web editor to make changes directly.
+  </Tab>
+  
+  <Tab title="Larger Changes">
+    For larger documentation updates:
+    
+    1. Clone the repository
+    2. Make changes to docs in `/docs`
+    3. Test locally if applicable
+    4. Open a pull request
+  </Tab>
+</Tabs>
+
+## Contributing Code
+
+If you'd like to contribute code, please follow the guidelines below.
+
+### Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Node.js 20+" icon="node-js">
+    Required for running the project
+  </Card>
+  
+  <Card title="pnpm 10+" icon="package">
+    This repo uses pnpm exclusively
+  </Card>
+</CardGroup>
+
+<Warning>
+  Other package managers (npm, yarn) are not supported.
+</Warning>
+
+## Local Development Setup
+
+<Steps>
+  <Step title="Clone your fork">
+    ```bash
+    git clone <your-fork-url>
+    cd <repo-name>
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Configure environment">
+    Create `.env` files for the relevant apps:
+    
+    - `apps/www/.env`
+    - `apps/slack-app/.env`
+    
+    Variables are defined in:
+    - `apps/www/src/lib/env.server.ts`
+    - `apps/www/src/lib/env.client.ts`
+    - Slack app config files
+  </Step>
+
+  <Step title="Set up database">
+    ```bash
+    # run database migrations
+    pnpm db:push
+
+    # seed demo data (optional but helpful)
+    pnpm db:seed
+    ```
+  </Step>
+
+  <Step title="Start development server">
+    ```bash
+    pnpm dev
+    ```
+    
+    - Web app: `http://localhost:3000`
+    - Slack app: `http://localhost:3001`
+  </Step>
+</Steps>
+
+<Info>
+  See the [Local Setup guide](/development/local-setup) for detailed instructions.
+</Info>
+
+## Development Workflow
+
+### Making Changes
+
+<Steps>
+  <Step title="Create a feature branch">
+    ```bash
+    git checkout -b my-feature
+    ```
+    
+    Branch from `main` for your changes.
+  </Step>
+
+  <Step title="Make your changes">
+    Write your code following the project's patterns and conventions.
+  </Step>
+
+  <Step title="Test locally">
+    ```bash
+    # run linting
+    pnpm lint
+    
+    # build to check for errors
+    pnpm build
+    
+    # manually test in the browser
+    pnpm dev
+    ```
+  </Step>
+
+  <Step title="Commit your changes">
+    ```bash
+    git commit -m "feat: describe the change clearly"
+    ```
+    
+    Use conventional commit format (see below).
+  </Step>
+</Steps>
+
+### Commit Convention
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/):
+
+<Tabs>
+  <Tab title="feat">
+    **New feature**
+    
+    ```bash
+    git commit -m "feat: add user analytics dashboard"
+    ```
+  </Tab>
+  
+  <Tab title="fix">
+    **Bug fix**
+    
+    ```bash
+    git commit -m "fix: resolve avatar background in dark mode"
+    ```
+  </Tab>
+  
+  <Tab title="docs">
+    **Documentation changes**
+    
+    ```bash
+    git commit -m "docs: update setup instructions"
+    ```
+  </Tab>
+  
+  <Tab title="refactor">
+    **Code refactoring**
+    
+    ```bash
+    git commit -m "refactor: simplify feedback query logic"
+    ```
+  </Tab>
+  
+  <Tab title="test">
+    **Adding or updating tests**
+    
+    ```bash
+    git commit -m "test: add tests for feedback API"
+    ```
+  </Tab>
+  
+  <Tab title="chore">
+    **Maintenance tasks**
+    
+    ```bash
+    git commit -m "chore: update dependencies"
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  The project uses Husky for pre-commit hooks that automatically format code with Biome.
+</Info>
+
+## Testing Your Changes
+
+Before submitting a pull request:
+
+<Steps>
+  <Step title="Build successfully">
+    ```bash
+    pnpm build
+    ```
+    
+    Ensure all packages build without errors.
+  </Step>
+
+  <Step title="Pass linting">
+    ```bash
+    pnpm lint
+    ```
+    
+    Fix any linting errors reported by Biome.
+  </Step>
+
+  <Step title="Manual testing">
+    Start the dev server and test your changes:
+    
+    ```bash
+    pnpm dev
+    ```
+    
+    - Test in light and dark modes
+    - Check responsive layouts (mobile, tablet, desktop)
+    - Test the core user flows affected by your changes
+    - Check browser console and server logs for errors
+  </Step>
+</Steps>
+
+<Tip>
+  Pre-commit hooks will automatically format your code with Biome.
+</Tip>
+
+## Pull Request Process
+
+### Before Opening a PR
+
+<Checklist>
+  - [ ] `pnpm build` succeeds
+  - [ ] `pnpm lint` passes
+  - [ ] Changes tested locally in dev mode
+  - [ ] Manually tested affected features
+  - [ ] No console errors or warnings
+</Checklist>
+
+### PR Title
+
+Use a clear, action-oriented title following conventional commit style:
+
+<CodeGroup>
+```text Good Examples
+fix: resolve avatar background in dark mode
+feat: add user analytics dashboard
+docs: improve local setup instructions
+```
+
+```text Bad Examples
+Fixed a bug
+Updates
+Changes to code
+```
+</CodeGroup>
+
+### PR Description
+
+Include in your PR description:
+
+<Accordion title="PR description template">
+  ```markdown
+  ## Summary
+  Brief description of what this PR does
+
+  ## Changes
+  - Detailed list of changes
+  - Another change
+
+  ## Screenshots (for UI changes)
+  Before and after screenshots
+
+  ## Breaking Changes
+  Any breaking changes or migration notes
+
+  ## Testing
+  How to test these changes
+  ```
+</Accordion>
+
+### What to Include
+
+<CardGroup cols={2}>
+  <Card title="Summary" icon="align-left">
+    Clear description of the changes
+  </Card>
+  
+  <Card title="Screenshots" icon="image">
+    Before/after for UI changes
+  </Card>
+  
+  <Card title="Breaking Changes" icon="triangle-exclamation">
+    Any breaking changes or migrations
+  </Card>
+  
+  <Card title="Testing Steps" icon="vial">
+    How to test the changes
+  </Card>
+</CardGroup>
+
+## Code Style
+
+This project uses **Biome** for linting and formatting.
+
+### Biome Configuration
+
+<Tabs>
+  <Tab title="Formatting">
+    - **Indentation**: 2 spaces
+    - **Semicolons**: Required
+    - **Trailing commas**: Always
+    - **Quotes**: Double quotes
+    - **Line width**: 80 characters
+  </Tab>
+  
+  <Tab title="Import Organization">
+    Biome automatically organizes imports in this order:
+    
+    1. Node.js built-ins
+    2. External packages
+    3. Internal packages (`@feedback/*`)
+    4. Relative imports
+  </Tab>
+  
+  <Tab title="Naming Conventions">
+    - **Files**: kebab-case (`my-component.tsx`)
+    - **Components**: PascalCase (`MyComponent`)
+    - **Functions**: camelCase (`myFunction`)
+    - **Constants**: SCREAMING_SNAKE_CASE (`MY_CONSTANT`)
+  </Tab>
+</Tabs>
+
+### Commands
+
+<CodeGroup>
+```bash Format code
+pnpm format
+```
+
+```bash Check linting
+pnpm lint
+```
+
+```bash Fix linting issues (if possible)
+pnpm lint --apply
+```
+</CodeGroup>
+
+<Info>
+  Husky pre-commit hooks automatically run `biome format --write` on staged files.
+</Info>
+
+## Project Structure
+
+Understanding the codebase structure:
+
+<Accordion title="View detailed structure">
+  ```
+  .
+  ├── apps/
+  │   ├── www/              # Next.js feedback web app
+  │   │   ├── src/
+  │   │   │   ├── app/      # Next.js app router pages
+  │   │   │   ├── components/  # React components
+  │   │   │   ├── workflows/   # Workflow DevKit workflows
+  │   │   │   └── lib/      # Utilities, queries, actions
+  │   │   └── scripts/      # Seed scripts
+  │   └── slack-app/        # Slack integration (Bolt + Nitro)
+  │       └── server/
+  │           ├── api/      # API routes
+  │           ├── listeners/  # Slack event listeners
+  │           └── lib/      # Slack utilities
+  ├── packages/
+  │   ├── ai/               # Shared AI package
+  │   │   └── src/
+  │   │       ├── agents/   # AI SDK agents
+  │   │       ├── tools/    # Agent tools
+  │   │       └── embeddings/  # Vector embeddings
+  │   ├── database/         # Drizzle ORM schema
+  │   ├── redis/            # Redis helpers
+  │   └── config/           # Shared configuration
+  └── README.md
+  ```
+</Accordion>
+
+### Key Directories
+
+<CardGroup cols={2}>
+  <Card title="apps/www/src/app" icon="folder">
+    Next.js App Router pages and API routes
+  </Card>
+  
+  <Card title="apps/www/src/components" icon="folder">
+    React components (UI and feature components)
+  </Card>
+  
+  <Card title="apps/www/src/workflows" icon="folder">
+    Workflow DevKit background workflows
+  </Card>
+  
+  <Card title="apps/www/src/lib" icon="folder">
+    Server actions, utilities, and queries
+  </Card>
+  
+  <Card title="packages/ai" icon="folder">
+    AI agents, tools, and embedding utilities
+  </Card>
+  
+  <Card title="packages/database" icon="folder">
+    Drizzle ORM schema and database utilities
+  </Card>
+</CardGroup>
+
+## Development Guidelines
+
+### Database Operations
+
+<Warning>
+  **Critical**: Use Drizzle Relational Query Builder (RQB) syntax ONLY. Never use `db.select()` patterns.
+</Warning>
+
+<CodeGroup>
+```typescript ✅ Correct (RQB)
+import { db } from "@feedback/db";
+
+const feedback = await db.query.feedback.findMany({
+  where: (feedback, { eq }) => eq(feedback.status, 'open'),
+  with: { user: true, comments: true }
+});
+```
+
+```typescript ❌ Never do this
+import { db } from "@feedback/db";
+import { eq } from "drizzle-orm";
+
+// NEVER use db.select() syntax
+const result = await db.select().from(Feedback).where(eq(Feedback.id, id));
+```
+</CodeGroup>
+
+See the [Database guide](/development/database) for more details.
+
+### Server Actions
+
+<Info>
+  **Always use next-safe-action clients** - never create raw server actions.
+</Info>
+
+<CodeGroup>
+```typescript ✅ Correct (with action client)
+"use server";
+
+import { authActionClient } from "@/lib/actions/clients/auth";
+import { z } from "zod";
+
+const schema = z.object({
+  title: z.string().min(1),
+});
+
+export const createFeedback = authActionClient
+  .metadata({ actionName: "createFeedback", entity: "feedback" })
+  .inputSchema(schema)
+  .action(async ({ parsedInput, ctx }) => {
+    // action logic
+  });
+```
+
+```typescript ❌ Never do this
+"use server";
+
+// NEVER create raw server actions
+export async function createFeedback(data: unknown) {
+  // no validation, no auth, no error handling
+}
+```
+</CodeGroup>
+
+### Component Patterns
+
+<Tabs>
+  <Tab title="Use shadcn/ui">
+    Use components from `src/components/ui/`:
+    
+    ```tsx
+    import { Button } from "@/components/ui/button";
+    import { Card } from "@/components/ui/card";
+    
+    export function MyComponent() {
+      return (
+        <Card>
+          <Button>Click me</Button>
+        </Card>
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Path aliases">
+    Use the `@/` path alias consistently:
+    
+    ```tsx
+    // good
+    import { Button } from "@/components/ui/button";
+    import { db } from "@feedback/db";
+    
+    // avoid
+    import { Button } from "../../../components/ui/button";
+    ```
+  </Tab>
+  
+  <Tab title="Data fetching">
+    Use SWR for client-side data fetching:
+    
+    ```tsx
+    import useSWR from "swr";
+    
+    export function MyComponent({ id }: { id: string }) {
+      const { data, error, isLoading } = useSWR(
+        `/api/feedback/${id}`,
+        fetcher
+      );
+      
+      if (isLoading) return <div>Loading...</div>;
+      if (error) return <div>Error: {error.message}</div>;
+      
+      return <div>{data.title}</div>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Questions & Support
+
+If you're not sure how best to contribute:
+
+<CardGroup cols={2}>
+  <Card title="Check Existing Issues" icon="magnifying-glass">
+    Search for similar issues or pull requests
+  </Card>
+  
+  <Card title="Open a Discussion" icon="comments">
+    Open a new issue to discuss your idea or question
+  </Card>
+</CardGroup>
+
+<Info>
+  Thanks for helping improve GTM Feedback!
+</Info>
+
+## Related Documentation
+
+<CardGroup cols={3}>
+  <Card title="Local Setup" icon="laptop-code" href="/development/local-setup">
+    Get started with local development
+  </Card>
+  
+  <Card title="Database" icon="database" href="/development/database">
+    Learn about database operations
+  </Card>
+  
+  <Card title="Workflows" icon="workflow" href="/development/workflows">
+    Create background workflows
+  </Card>
+</CardGroup>

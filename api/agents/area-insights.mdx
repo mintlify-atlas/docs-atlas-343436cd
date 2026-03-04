@@ -1,0 +1,307 @@
+---
+title: 'Area Insights Agent'
+description: 'AI agent for generating strategic product insights from feature request data'
+---
+
+## Overview
+
+The Area Insights Agent is a product analytics strategist that analyzes open feature requests for a product area and generates actionable insights for Product Managers. It produces structured reports with up to 4 key sections highlighting dealbreakers, customer segments, themes, and execution status.
+
+**Location**: `packages/ai/src/agents/area-insights.ts`
+
+## Purpose
+
+Analyzes product area data to:
+- Identify critical dealbreakers blocking revenue
+- Surface which customer segments feel the most pain
+- Detect recurring themes and friction points
+- Assess execution status and delivery velocity
+
+## Agent Configuration
+
+**Model**: Claude Sonnet (via `claudeSonnet`)
+
+**Tools**: Area insight tools with pre-fetched context
+
+**Output**: Structured `AreaInsightsReport` with up to 4 sections
+
+## System Prompt
+
+The agent operates with strategic product analytics instructions:
+
+```
+You are a product analytics strategist analyzing OPEN feature requests for a single product area.
+
+Your job is to produce a concise AreaInsightsReport with up to 4 sections that help Product Managers understand and prioritize their work.
+
+Available sections (use the section id as shown):
+1. "dealbreakers" - Critical issues blocking revenue. Use when there are high-severity requests from enterprise accounts.
+   - Title examples: "Critical Dealbreakers", "Revenue at Risk"
+   - Use visual kind: "dealbreakers-metric"
+   - Props MUST include: count, totalArr, topItems (with slug, title, arr, entryCount)
+
+2. "segments" - Which customer segments feel the most pain. Use when there's meaningful segment data.
+   - Title examples: "Who's Feeling the Pain", "Impact by Segment"
+   - Use visual kind: "segment-breakdown"
+   - Props MUST include: segments (with name, highSeverityCount, arr, accountCount)
+
+3. "themes" - Recurring patterns of confusion or friction. Use when you can identify patterns across requests.
+   - Title examples: "Common Themes", "Recurring Friction Points"
+   - Use visual kind: "themes-list"
+   - Props MUST include: themes (with name, count, exampleRequests with slug and title)
+
+4. "execution" - How well this area is executing (status mix, velocity).
+   - Title examples: "Execution Status", "Delivery Snapshot"
+   - Use visual kind: "status-metric"
+   - Props MUST include: open, shipped, deprioritized, shipRate
+
+Guidelines:
+- Analyze the data provided in the prompt to identify key insights
+- Be opinionated: highlight what matters most, don't just dump data
+- Keep summaries to 1-2 sentences max, no fluff or hedging
+- Set importance to "critical" only for dealbreakers with significant ARR (>$500k)
+- Set importance to "warning" for concerning patterns that need attention
+- Set importance to "info" for general status updates
+- If a section has no meaningful data, skip it entirely
+- Order sections by importance (critical first, then warning, then info)
+```
+
+## Input Context
+
+The agent requires a pre-fetched `AreaInsightsContext` containing all necessary data:
+
+<ParamField path="areaId" type="string" required>
+  The UUID of the product area
+</ParamField>
+
+<ParamField path="areaSlug" type="string" required>
+  The slug of the product area
+</ParamField>
+
+<ParamField path="areaName" type="string" required>
+  The name of the product area
+</ParamField>
+
+<ParamField path="openRequests" type="OpenRequest[]" required>
+  All open feature requests in this area
+  <ParamField path="id" type="string" />
+  <ParamField path="slug" type="string" />
+  <ParamField path="title" type="string" />
+  <ParamField path="description" type="string" />
+  <ParamField path="status" type="string" />
+  <ParamField path="createdAt" type="string" />
+  <ParamField path="updatedAt" type="string" />
+</ParamField>
+
+<ParamField path="allFeedback" type="FeedbackData[]" required>
+  All customer feedback entries
+  <ParamField path="id" type="string" />
+  <ParamField path="requestId" type="string" />
+  <ParamField path="accountId" type="string" />
+  <ParamField path="severity" type="enum">
+    `low`, `medium`, or `high`
+  </ParamField>
+  <ParamField path="createdAt" type="string" />
+  <ParamField path="opportunityId" type="string" />
+</ParamField>
+
+<ParamField path="accountsById" type="Map<string, AccountData>" required>
+  Account information indexed by ID
+  <ParamField path="id" type="string" />
+  <ParamField path="name" type="string" />
+  <ParamField path="arr" type="number" />
+  <ParamField path="isEnterprise" type="boolean" />
+  <ParamField path="segment" type="string" />
+  <ParamField path="industry" type="string" />
+  <ParamField path="region" type="string" />
+</ParamField>
+
+<ParamField path="opportunitiesById" type="Map<string, OpportunityData>" required>
+  Opportunity information indexed by ID
+</ParamField>
+
+<ParamField path="feedbackByRequestId" type="Map<string, FeedbackData[]>" required>
+  Feedback grouped by request ID
+</ParamField>
+
+<ParamField path="requestById" type="Map<string, OpenRequest>" required>
+  Requests indexed by ID
+</ParamField>
+
+<ParamField path="statusDistribution" type="StatusDistribution" required>
+  Overall execution metrics
+  <ParamField path="open" type="number" />
+  <ParamField path="shipped" type="number" />
+  <ParamField path="deprioritized" type="number" />
+  <ParamField path="shippedPercentage" type="number" />
+</ParamField>
+
+## Output
+
+<ResponseField name="areaId" type="string">
+  The UUID of the product area
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  The slug of the product area
+</ResponseField>
+
+<ResponseField name="generatedAt" type="string">
+  ISO timestamp when this report was generated
+</ResponseField>
+
+<ResponseField name="sections" type="InsightSection[]">
+  Up to 4 insight sections for this area
+  <ResponseField name="id" type="enum">
+    Section identifier: `dealbreakers`, `segments`, `themes`, or `execution`
+  </ResponseField>
+  <ResponseField name="title" type="string">
+    Human-friendly title (e.g., "Critical Dealbreakers")
+  </ResponseField>
+  <ResponseField name="summary" type="string">
+    1-2 sentence summary, concise and actionable
+  </ResponseField>
+  <ResponseField name="importance" type="enum">
+    Urgency level: `info`, `warning`, or `critical`
+  </ResponseField>
+  <ResponseField name="visuals" type="InsightVisual[]">
+    Visual components to render
+    <ResponseField name="kind" type="enum">
+      Visual type: `dealbreakers-metric`, `segment-breakdown`, `themes-list`, `status-metric`, `severity-distribution`, `top-requests-list`
+    </ResponseField>
+    <ResponseField name="props" type="Record<string, unknown>">
+      Props to pass to the visual component (structure depends on `kind`)
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Visual Component Props
+
+### Dealbreakers Metric
+
+```typescript
+{
+  count: number;              // Number of critical dealbreakers
+  totalArr: number;           // Total ARR at risk
+  topItems: Array<{           // Top dealbreaker requests
+    slug: string;             // Request slug
+    title: string;            // Request title
+    arr: number;              // ARR for this request
+    entryCount: number;       // Number of feedback entries
+  }>;
+}
+```
+
+### Segment Breakdown
+
+```typescript
+{
+  segments: Array<{
+    name: string;             // Segment name
+    highSeverityCount: number; // High severity feedback count
+    arr: number;              // Total ARR for segment
+    accountCount: number;     // Number of accounts
+  }>;
+}
+```
+
+### Themes List
+
+```typescript
+{
+  themes: Array<{
+    name: string;             // Theme name
+    count: number;            // Occurrences
+    exampleRequests: Array<{  // Example requests
+      slug: string;           // MUST use exact slug from data
+      title: string;          // Request title
+    }>;
+  }>;
+}
+```
+
+### Status Metric
+
+```typescript
+{
+  open: number;               // Open requests
+  shipped: number;            // Shipped requests
+  deprioritized: number;      // Deprioritized requests
+  shipRate: number;           // Ship rate percentage
+}
+```
+
+## Usage Example
+
+```typescript
+import { createAreaInsightsAgent } from "@feedback/ai/agents";
+import type { AreaInsightsContext } from "@feedback/ai/tools/area-insights/types";
+
+// Prepare context with all necessary data
+const context: AreaInsightsContext = {
+  areaId: "550e8400-e29b-41d4-a716-446655440000",
+  areaSlug: "analytics",
+  areaName: "Analytics",
+  openRequests: openRequestsData,
+  allFeedback: feedbackData,
+  accountsById: accountsMap,
+  opportunitiesById: opportunitiesMap,
+  feedbackByRequestId: feedbackByRequestMap,
+  requestById: requestMap,
+  statusDistribution: {
+    open: 45,
+    shipped: 23,
+    deprioritized: 8,
+    shippedPercentage: 30.3
+  }
+};
+
+// Create agent with context
+const agent = createAreaInsightsAgent(context);
+
+// Generate insights
+const result = await agent.generate({
+  prompt: `Analyze the Analytics product area and generate insights.
+
+Area: ${context.areaName}
+Open Requests: ${context.openRequests.length}
+Total Feedback: ${context.allFeedback.length}
+
+Identify the most critical insights for the PM team.`
+});
+
+const report = result.output;
+
+console.log(`Generated ${report.sections.length} insight sections`);
+
+for (const section of report.sections) {
+  console.log(`\n${section.title} (${section.importance})`);
+  console.log(section.summary);
+  console.log(`Visuals: ${section.visuals.length}`);
+}
+```
+
+## Section Selection Strategy
+
+The agent intelligently selects which sections to include based on the data:
+
+1. **Dealbreakers**: Included when high-severity requests exist from enterprise accounts with significant ARR
+2. **Segments**: Included when there's meaningful segment distribution data
+3. **Themes**: Included when patterns can be identified across multiple requests
+4. **Execution**: Always relevant for tracking delivery performance
+
+Sections are ordered by importance (critical → warning → info) to highlight what needs immediate attention.
+
+## Important Notes
+
+- **Slug Accuracy**: The agent MUST use exact slugs from the provided data. Never invent or guess slugs.
+- **Pre-fetched Context**: All data must be fetched and prepared before calling the agent
+- **Opinionated Analysis**: The agent provides strategic insights, not just data dumps
+- **Actionable Summaries**: All summaries are kept to 1-2 sentences maximum
+- **Revenue Focus**: Dealbreakers with ARR > $500k are marked as critical importance
+
+## Related Types
+
+For full type definitions, see:
+- `packages/ai/src/agents/area-insights.ts` - Agent implementation
+- `packages/ai/src/tools/area-insights/types.ts` - Context and data types

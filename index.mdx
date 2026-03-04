@@ -1,97 +1,300 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: GTM Feedback Documentation
+description: AI-powered feedback collection, triaging, and reporting system with Slack integration
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden dark:bg-[#0f1117] bg-white py-20">
+  <div className="max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="lg:grid lg:grid-cols-12 lg:gap-12 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold dark:text-gray-100 text-gray-900 leading-tight">
+          AI-powered feedback management for product teams
+        </h1>
+        <p className="mt-6 text-lg sm:text-xl dark:text-gray-400 text-gray-600 max-w-2xl">
+          Collect, triage, and analyze product feedback from anywhere. Use AI agents to automatically match feedback to feature requests, generate insights, and keep your team in sync.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-full bg-[#040404] dark:bg-white text-white dark:text-[#040404] font-semibold hover:bg-[#1a1a1a] dark:hover:bg-gray-100 transition-colors"
+          >
+            Get started
+            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+          <a 
+            href="/concepts/architecture" 
+            className="inline-flex items-center px-6 py-3 rounded-full border dark:border-white/30 dark:bg-white/10 border-gray-300 bg-gray-50 dark:text-white text-gray-900 font-semibold dark:hover:border-white/50 hover:border-gray-400 transition-colors"
+          >
+            View architecture
+          </a>
+        </div>
+      </div>
+      <div className="mt-12 lg:mt-0 lg:col-span-5">
+        <div className="relative">
+          <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-6 dark:border-[#27272a] border border-gray-200">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 dark:bg-[#242838] bg-white rounded-lg dark:border-[#27272a] border border-gray-100">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium dark:text-gray-200 text-gray-900">Slack feedback captured</p>
+                  <p className="text-xs dark:text-gray-400 text-gray-500">AI matching in progress...</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 dark:bg-[#242838] bg-white rounded-lg dark:border-[#27272a] border border-gray-100">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium dark:text-gray-200 text-gray-900">Matched to existing request</p>
+                  <p className="text-xs dark:text-gray-400 text-gray-500">Confidence: 0.94</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 dark:bg-[#242838] bg-white rounded-lg dark:border-[#27272a] border border-gray-100">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium dark:text-gray-200 text-gray-900">Area insights generated</p>
+                  <p className="text-xs dark:text-gray-400 text-gray-500">Analytics Dashboard</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Quick start
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Get GTM Feedback running in minutes with our one-click deploy or local setup
+  </p>
+  
+  <Steps>
+    <Step title="Deploy to Vercel">
+      Click the deploy button to automatically provision Neon Postgres, Upstash KV, and Upstash Vector:
+      
+      ```bash
+      https://vercel.com/new/clone?repository-url=https://github.com/vercel-labs/oss-gtm-feedback
+      ```
+      
+      The deployment will set up both the web app and optional Slack integration.
+    </Step>
+    
+    <Step title="Configure authentication">
+      Set up Google OAuth for user authentication:
+      
+      - Create a Google Cloud project
+      - Enable Google OAuth API
+      - Add your environment variables:
+      
+      ```bash
+      AUTH_GOOGLE_CLIENT_ID=your-client-id
+      AUTH_GOOGLE_SECRET=your-client-secret
+      AUTH_SECRET=your-random-secret
+      ```
+    </Step>
+    
+    <Step title="Add AI credentials">
+      Configure your AI provider for semantic matching and insights:
+      
+      ```bash
+      OPENAI_API_KEY=your-openai-key
+      ```
+      
+      The system uses OpenAI for embeddings and AI agents. You can also use compatible providers via AI Gateway.
+    </Step>
+    
+    <Step title="Seed demo data (optional)">
+      Populate your database with realistic B2B SaaS feedback data:
+      
+      ```bash
+      pnpm db:push
+      pnpm db:seed
+      ```
+      
+      <Accordion title="What's included in demo data">
+        - 5 internal users
+        - 8 product areas (Analytics Dashboard, API Platform, etc.)
+        - 10 customer accounts with ARR data
+        - 30+ opportunities
+        - 15 feature requests with vector embeddings
+        - 75+ customer feedback entries
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Explore by topic
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Learn about the core features and concepts that power GTM Feedback
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card title="AI-powered matching" icon="sparkles" href="/concepts/semantic-matching">
+      Automatically match feedback to feature requests using vector embeddings and AI agents
+    </Card>
+    <Card title="Workflow execution" icon="diagram-project" href="/concepts/workflows">
+      Durable workflows orchestrate background tasks for processing and insights
+    </Card>
+    <Card title="Slack integration" icon="slack" href="/integrations/slack">
+      Capture feedback from Slack reactions and conversations with human-in-the-loop approval
+    </Card>
+    <Card title="Analytics & insights" icon="chart-line" href="/features/analytics-insights">
+      AI-generated reports analyze product areas and surface key trends
+    </Card>
+    <Card title="Account tracking" icon="building" href="/features/accounts-opportunities">
+      Link feedback to customer accounts and opportunities with ARR data
+    </Card>
+    <Card title="Feature requests" icon="lightbulb" href="/features/feature-requests">
+      Organize feedback into feature requests with areas, status, and priority
+    </Card>
+  </CardGroup>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Key capabilities
+  </h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">
+    Everything you need to collect, triage, and act on product feedback
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="/features/feedback-collection" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 dark:hover:border-[#040404] hover:border-[#040404] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold dark:text-gray-100 text-gray-900 mb-2">Multi-channel capture</h3>
+            <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Collect feedback via Slack reactions, web forms, or direct submission</p>
+            <span className="text-sm font-medium dark:text-gray-400 text-gray-600 dark:group-hover:text-[#040404] group-hover:text-[#040404] transition-colors inline-flex items-center">
+              Learn more
+              <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </a>
+    
+    <a href="/concepts/ai-agents" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 dark:hover:border-[#040404] hover:border-[#040404] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold dark:text-gray-100 text-gray-900 mb-2">Specialized AI agents</h3>
+            <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Semantic search, request creation, thread summarization, and insights generation</p>
+            <span className="text-sm font-medium dark:text-gray-400 text-gray-600 dark:group-hover:text-[#040404] group-hover:text-[#040404] transition-colors inline-flex items-center">
+              Learn more
+              <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </a>
+    
+    <a href="/concepts/semantic-matching" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 dark:hover:border-[#040404] hover:border-[#040404] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold dark:text-gray-100 text-gray-900 mb-2">Three-tier confidence system</h3>
+            <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Auto-add (≥0.9), human approval (0.8-0.9), or create new (&lt;0.8)</p>
+            <span className="text-sm font-medium dark:text-gray-400 text-gray-600 dark:group-hover:text-[#040404] group-hover:text-[#040404] transition-colors inline-flex items-center">
+              Learn more
+              <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </a>
+    
+    <a href="/integrations/vector-search" className="group block rounded-2xl dark:border-[#27272a] border border-gray-200 dark:hover:border-[#040404] hover:border-[#040404] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold dark:text-gray-100 text-gray-900 mb-2">Vector search with Upstash</h3>
+            <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">Fast semantic search across thousands of requests using OpenAI embeddings</p>
+            <span className="text-sm font-medium dark:text-gray-400 text-gray-600 dark:group-hover:text-[#040404] group-hover:text-[#040404] transition-colors inline-flex items-center">
+              Learn more
+              <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
 
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-8 md:p-12 dark:border-[#27272a] border border-gray-200">
+    <div className="max-w-3xl">
+      <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-4">
+        Ready to streamline your feedback process?
+      </h2>
+      <p className="text-base dark:text-gray-400 text-gray-600 mb-6">
+        Deploy GTM Feedback to Vercel in minutes, or set up a local development environment to customize the system for your team.
+      </p>
+      <div className="flex flex-wrap gap-4">
+        <a 
+          href="/quickstart" 
+          className="inline-flex items-center px-6 py-3 rounded-full bg-[#040404] dark:bg-white text-white dark:text-[#040404] font-semibold hover:bg-[#1a1a1a] dark:hover:bg-gray-100 transition-colors"
+        >
+          Deploy now
+          <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </a>
+        <a 
+          href="/development/local-setup" 
+          className="inline-flex items-center px-6 py-3 rounded-full border dark:border-white/30 dark:bg-white/10 border-gray-300 bg-white dark:text-white text-gray-900 font-semibold dark:hover:border-white/50 hover:border-gray-400 transition-colors"
+        >
+          Local development
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

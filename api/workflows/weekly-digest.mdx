@@ -1,0 +1,424 @@
+---
+title: "Weekly Digest Workflow"
+description: "Send automated weekly summaries of feedback activity and product area metrics to Slack"
+---
+
+## Overview
+
+The Weekly Digest workflow automatically compiles and sends a comprehensive summary of feedback activity to your team's Slack channel. It provides a weekly snapshot of new feature requests, customer feedback, and product area metrics to keep stakeholders informed without manual reporting.
+
+<Info>
+  **Located at**: `apps/www/src/workflows/weekly-digest/index.ts`
+</Info>
+
+## Purpose
+
+This workflow solves the communication challenge of keeping teams updated on feedback trends. By automatically generating and sending weekly digests, it:
+
+- **Highlights top product areas** with the most activity
+- **Showcases new feature requests** created in the past week
+- **Surfaces recent customer feedback** from key accounts
+- **Provides product area metrics** in a threaded breakdown
+
+## Trigger Conditions
+
+The workflow is triggered by:
+
+- **Scheduled cron job**: Weekly (typically Monday mornings)
+- **Manual invocation**: Via API or admin interface for on-demand digests
+
+### Cron Configuration
+
+```bash
+# Vercel cron (vercel.json)
+{
+  "crons": [{
+    "path": "/api/cron/weekly-digest",
+    "schedule": "0 9 * * 1"  // 9 AM ET every Monday
+  }]
+}
+```
+
+## Execution Steps
+
+<Steps>
+  <Step title="Calculate Date Range">
+    Determines the 7-day window for the digest:
+    
+    ```typescript
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setHours(23, 59, 59, 999);
+    
+    const startDate = new Date(now);
+    startDate.setDate(now.getDate() - 7);
+    startDate.setHours(0, 0, 0, 0);
+    ```
+    
+    This ensures the digest covers exactly the last 7 days, regardless of when it runs.
+  </Step>
+
+  <Step title="Fetch Recent Requests">
+    Queries the database for new feature requests:
+    
+    ```typescript
+    const recentRequests = await getRecentRequests({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      limit: 3,  // Top 3 requests
+    });
+    ```
+    
+    Returns requests with creator information for attribution.
+  </Step>
+
+  <Step title="Fetch Recent Feedback">
+    Queries for new customer feedback (unique by account):
+    
+    ```typescript
+    const recentFeedback = await getRecentFeedback({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      limit: 3,  // Top 3 accounts
+    });
+    ```
+    
+    Includes account names and associated request details for context.
+  </Step>
+
+  <Step title="Aggregate Product Area Metrics">
+    Calculates activity metrics for each product area:
+    
+    ```typescript
+    const productAreaMetrics = await getProductAreaMetrics({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
+    ```
+    
+    Returns array of areas with:
+    - Request count
+    - Feedback count
+    - Area name and slug
+    - Sorted by total activity
+  </Step>
+
+  <Step title="Send Main Digest Message">
+    Composes and sends the primary Slack message:
+    
+    ```typescript
+    const messageResult = await sendSlackDigestMessage({
+      recentRequests,
+      recentFeedback,
+      productAreaMetrics,
+      periodStart: startDate,
+      periodEnd: endDate,
+    });
+    ```
+    
+    The message includes:
+    - Header with date range
+    - Top 3 product areas with activity
+    - New feature requests with links
+    - Recent customer feedback
+    
+    Returns message timestamp (`ts`) for threading.
+  </Step>
+
+  <Step title="Send Area Metrics in Thread">
+    Posts detailed metrics as a thread reply:
+    
+    ```typescript
+    await sendSlackProductAreaMetrics({
+      channel: messageResult.channel,
+      threadTs: messageResult.ts,
+      productAreaMetrics,
+    });
+    ```
+    
+    Provides a complete breakdown of all product areas, keeping the main message concise.
+  </Step>
+
+  <Step title="Return Summary">
+    Returns workflow execution summary:
+    
+    ```typescript
+    return {
+      status: "success",
+      requestsCount: recentRequests.length,
+      feedbackCount: recentFeedback.length,
+      productAreasCount: productAreaMetrics.length,
+    };
+    ```
+  </Step>
+</Steps>
+
+## Code Example
+
+### Invoking the Workflow
+
+```typescript
+import { weeklyDigestWorkflow } from "@/workflows/weekly-digest";
+
+const result = await weeklyDigestWorkflow();
+
+console.log(result);
+// {
+//   status: "success",
+//   requestsCount: 3,
+//   feedbackCount: 3,
+//   productAreasCount: 8
+// }
+```
+
+### Example Slack Message Format
+
+The workflow generates a Slack message like:
+
+```markdown
+📊 **Weekly Digest: Nov 25 - Dec 2**
+
+**🔥 Top Product Areas**
+• **Analytics Dashboard**: 5 feature requests, 12 customer feedback
+• **API Platform**: 3 feature requests, 8 customer feedback
+• **Mobile App**: 2 feature requests, 5 customer feedback
+
+**:gtm-feedback-feedback-icon: New Feature Requests**
+• <https://app.gtm/requests/api-rate-limits|Better API rate limit visibility>
+• <https://app.gtm/requests/mobile-offline|Mobile offline mode>
+• <https://app.gtm/requests/export-csv|CSV export for analytics>
+
+**:gtm-feedback-entries-icon: New Feedback**
+• **Acme Corp** - <https://app.gtm/requests/api-rate-limits|Better API rate limit visibility>
+• **TechStart Inc** - <https://app.gtm/requests/mobile-offline|Mobile offline mode>
+• **Enterprise LLC** - <https://app.gtm/requests/export-csv|CSV export for analytics>
+```
+
+## Workflow Steps Reference
+
+<AccordionGroup>
+  <Accordion title="getRecentRequests">
+    **Purpose**: Fetch recently created feature requests
+    
+    **Location**: `apps/www/src/workflows/weekly-digest/steps/get-recent-requests.ts`
+    
+    **Implementation**:
+    ```typescript
+    export async function getRecentRequests({
+      startDate,
+      endDate,
+      limit,
+    }: {
+      startDate: string;
+      endDate: string;
+      limit: number;
+    }) {
+      "use step";
+      
+      return await db.query.requests.findMany({
+        where: (requests, { and, gte, lte }) => and(
+          gte(requests.createdAt, new Date(startDate)),
+          lte(requests.createdAt, new Date(endDate))
+        ),
+        with: { user: true },
+        orderBy: (requests, { desc }) => [desc(requests.createdAt)],
+        limit,
+      });
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="getRecentFeedback">
+    **Purpose**: Fetch recent customer feedback, unique by account
+    
+    **Location**: `apps/www/src/workflows/weekly-digest/steps/get-recent-feedback.ts`
+    
+    **Key feature**: Groups by account to show diverse customer feedback rather than multiple entries from the same account
+    
+    **Returns**: Feedback entries with account and request details
+  </Accordion>
+
+  <Accordion title="getProductAreaMetrics">
+    **Purpose**: Calculate activity metrics for all product areas
+    
+    **Location**: `apps/www/src/workflows/weekly-digest/steps/get-product-area-metrics.ts`
+    
+    **Implementation**:
+    - Queries all product areas
+    - For each area, counts requests and feedback in date range
+    - Sorts by total activity (requests + feedback)
+    
+    **Returns**:
+    ```typescript
+    type ProductAreaMetric = {
+      id: string;
+      name: string;
+      slug: string;
+      requestCount: number;
+      feedbackCount: number;
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="sendSlackDigestMessage">
+    **Purpose**: Send the main digest message to Slack
+    
+    **Location**: `apps/www/src/workflows/weekly-digest/steps/send-slack-digest-message.ts`
+    
+    **Features**:
+    - Formats dates as "Nov 25 - Dec 2"
+    - Includes clickable links to requests and areas
+    - Uses custom Slack emojis (`:gtm-feedback-feedback-icon:`)
+    - Returns message timestamp for threading
+    
+    **Error handling**: Throws on failure to ensure workflow retry
+  </Accordion>
+
+  <Accordion title="sendSlackProductAreaMetrics">
+    **Purpose**: Send detailed area breakdown as thread reply
+    
+    **Location**: `apps/www/src/workflows/weekly-digest/steps/send-slack-product-area-metrics.ts`
+    
+    **Implementation**: Posts to the thread using `thread_ts` parameter, showing all areas with their individual metrics
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Required for Slack integration
+SLACK_BOT_TOKEN=xoxb-...              # Slack bot token for posting
+SLACK_DIGEST_CHANNEL_ID=C123456       # Channel for weekly digests
+
+# Application URL for links
+APP_URL=https://app.gtmfeedback.com
+```
+
+### Customizing Content
+
+#### Adjust Item Limits
+
+Modify the limit parameters in the workflow:
+
+```typescript
+const recentRequests = await getRecentRequests({
+  startDate: startDate.toISOString(),
+  endDate: endDate.toISOString(),
+  limit: 5,  // Changed from 3 to 5
+});
+```
+
+#### Change Date Range
+
+Modify the date calculation:
+
+```typescript
+// For 14-day digest instead of 7-day
+const startDate = new Date(now);
+startDate.setDate(now.getDate() - 14);  // Changed from -7
+```
+
+#### Customize Message Format
+
+Edit the message template in `send-slack-digest-message.ts`:
+
+```typescript
+let message = `📊 *Weekly Digest: ${periodStartStr} - ${periodEndStr}*\n\n`;
+
+// Add custom sections
+message += `*🎯 Key Highlights*\n`;
+message += `Total feedback this week: ${totalFeedback}\n`;
+```
+
+## Error Handling
+
+The workflow fails fast on critical errors:
+
+```typescript
+if (!messageResult.success || !messageResult.ts) {
+  throw new Error("Failed to send Slack digest message");
+}
+```
+
+This ensures:
+- Failed digests are retried by the workflow runtime
+- Teams are alerted if digests stop sending
+- No partial digests (main message without thread) are posted
+
+## Performance Considerations
+
+### Query Optimization
+
+All data fetching steps run in sequence (not parallel) to avoid overwhelming the database:
+
+```typescript
+// Sequential execution
+const recentRequests = await getRecentRequests(...);
+const recentFeedback = await getRecentFeedback(...);
+const productAreaMetrics = await getProductAreaMetrics(...);
+```
+
+Typical execution time: **2-4 seconds** for a database with:
+- 8 product areas
+- 100+ requests
+- 500+ feedback entries
+
+### Scalability
+
+For very large datasets, consider:
+
+1. **Add indexes** on `createdAt` columns
+2. **Cache area metrics** if the calculation is slow
+3. **Batch process** areas in chunks if there are 20+ areas
+
+## Monitoring & Debugging
+
+Add logging to track digest generation:
+
+```typescript
+console.log(
+  `Generating weekly digest for last 7 days: ${startDate.toISOString()} to ${endDate.toISOString()}`
+);
+
+console.log(`Found ${recentRequests.length} new requests`);
+console.log(`Found ${recentFeedback.length} unique account feedback`);
+console.log(`Calculated metrics for ${productAreaMetrics.length} areas`);
+```
+
+Monitor workflow execution:
+
+```typescript
+// In your cron handler
+try {
+  const result = await weeklyDigestWorkflow();
+  await trackMetric("weekly-digest-success", 1);
+} catch (error) {
+  await trackMetric("weekly-digest-failure", 1);
+  await sendAlert({
+    type: "weekly-digest-failed",
+    error: error.message,
+  });
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Slack Integration" icon="slack" href="/integrations/slack">
+    Learn about Slack app setup and configuration
+  </Card>
+  
+  <Card title="Analytics & Insights" icon="chart-line" href="/features/analytics-insights">
+    Understand product area metrics
+  </Card>
+  
+  <Card title="Feature Requests" icon="lightbulb" href="/features/feature-requests">
+    Learn about request management
+  </Card>
+  
+  <Card title="Workflows Concept" icon="diagram-project" href="/concepts/workflows">
+    Deep dive into workflow architecture
+  </Card>
+</CardGroup>
