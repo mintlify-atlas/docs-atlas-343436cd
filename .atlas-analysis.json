@@ -1,0 +1,134 @@
+{
+  "projectType": "saas",
+  "projectName": "GTM Feedback",
+  "projectDescription": "AI-powered feedback collection, triaging, and reporting system with Slack integration",
+  "theme": "maple",
+  "primaryColor": "#040404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/workflows",
+              "concepts/ai-agents",
+              "concepts/semantic-matching"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/web-app",
+              "deployment/slack-app",
+              "deployment/environment-variables"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/feedback-collection",
+              "features/feature-requests",
+              "features/accounts-opportunities",
+              "features/product-areas",
+              "features/analytics-insights"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/slack",
+              "integrations/ai-models",
+              "integrations/vector-search",
+              "integrations/authentication"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/local-setup",
+              "development/database",
+              "development/workflows",
+              "development/contributing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Packages",
+            "pages": [
+              "api/packages/ai",
+              "api/packages/database",
+              "api/packages/redis"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api/agents/semantic-search",
+              "api/agents/request-creator",
+              "api/agents/thread-summarization",
+              "api/agents/area-insights"
+            ]
+          },
+          {
+            "group": "Workflows",
+            "pages": [
+              "api/workflows/process-feedback",
+              "api/workflows/area-insights",
+              "api/workflows/weekly-digest"
+            ]
+          },
+          {
+            "group": "Database Schema",
+            "pages": [
+              "api/schema/requests",
+              "api/schema/feedback",
+              "api/schema/accounts",
+              "api/schema/areas"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "AI-powered semantic matching with vector embeddings",
+    "Multi-channel feedback capture (Slack, web UI, forms)",
+    "Intelligent triaging with three-tier confidence system",
+    "Human-in-the-loop approval workflows via Slack",
+    "Area insights generation with AI agents",
+    "Durable workflow execution with Workflow DevKit",
+    "Account and opportunity tracking with ARR calculations",
+    "Real-time analytics and reporting dashboards"
+  ],
+  "publicApiSurface": [
+    "/api/slack/ingest - Slack feedback ingestion endpoint",
+    "/api/slack/reaction - Reaction-based feedback capture",
+    "/api/ext/semantic-search - External semantic search API",
+    "@feedback/ai - AI agents and embeddings package",
+    "@feedback/database - Drizzle ORM schema and utilities",
+    "@feedback/redis - Redis client helpers",
+    "SemanticSearchAgent - Matches feedback to feature requests",
+    "RequestCreatorAgent - Generates feature request details",
+    "ThreadSummarizationAgent - Extracts pain points from Slack threads",
+    "AreaInsightsAgent - Analyzes product areas and generates reports",
+    "processFeedbackWorkflow - Main feedback processing workflow",
+    "generateAreaInsightsWorkflow - Area insights generation workflow",
+    "weeklyDigestWorkflow - Weekly Slack digest workflow"
+  ]
+}
